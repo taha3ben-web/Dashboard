@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Topbar } from "@/components/Topbar";
 import { DataTable, Column } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -63,6 +64,12 @@ export default function DriversPage() {
       header: "إجراءات",
       render: (d) => (
         <div className="flex gap-1">
+          <Link
+            href={`/drivers/${d.id}`}
+            className="rounded bg-brand/10 px-2 py-1 text-xs text-brand"
+          >
+            تفاصيل
+          </Link>
           <button
             onClick={() => act(d.id, "approve")}
             className="rounded bg-green-500/10 px-2 py-1 text-xs text-green-500"
