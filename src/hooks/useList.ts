@@ -4,6 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { Paginated } from "@/lib/catalog";
 
+/**
+ * استعلام قوائم موحّد: بحث + ترقيم + ترتيب + ترشيح.
+ * الحقول معرّفة صراحةً (بلا index signature) لتوافق TypeScript الكامل
+ * دون السماح بقيم undefined، ومطابقة ListQueryDto في الباك-إند تمامًا.
+ */
 export interface ListQuery {
   page: number;
   limit: number;
@@ -13,7 +18,9 @@ export interface ListQuery {
   status: string;
   activeOnly: boolean;
   includeDeleted: boolean;
-  [key: string]: string | number | boolean;
+  // مُرشّحات اختيارية خاصة ببعض القوائم (تطابق الباك-إند).
+  categoryId?: string;
+  vehicleTypeId?: string;
 }
 
 export const DEFAULT_QUERY: ListQuery = {
@@ -27,15 +34,7 @@ export const DEFAULT_QUERY: ListQuery = {
   includeDeleted: false,
 };
 
-/**
- * خطاف جلب قوائم موحّد: بحث + ترقيم + ترتيب + ترشيح.
- * يتعامل مع شكل الإرجاع الموحّد { data, total, page, limit, pages }.
- * يزيل المفاتيح الفارغة حتى لا ترفضها سياسة whitelist في الباك-إند.
- */
-export function useList<T>(
-  path: string,
-  initial: Partial<ListQuery> = {},
-) {
+export function useList<T>(path: string, initial: Partial<ListQuery> = {}) {
   const [query, setQueryState] = useState<ListQuery>({
     ...DEFAULT_QUERY,
     ...initial,
@@ -48,6 +47,7 @@ export function useList<T>(
   const reqId = useRef(0);
 
   const buildParams = useCallback((q: ListQuery) => {
+    // يزيل المفاتيح الفارغة حتى لا ترفضها سياسة whitelist في الباك-إند.
     const params: Record<string, string | number> = {
       page: q.page,
       limit: q.limit,
@@ -58,14 +58,8 @@ export function useList<T>(
     if (q.status) params.status = q.status;
     if (q.activeOnly) params.activeOnly = "true";
     if (q.includeDeleted) params.includeDeleted = "true";
-    // مفاتيح إضافية (مثل categoryId / vehicleTypeId).
-    for (const k of Object.keys(q)) {
-      if (k in DEFAULT_QUERY) continue;
-      const v = q[k];
-      if (v !== "" && v !== false && v !== undefined && v !== null) {
-        params[k] = v as string | number;
-      }
-    }
+    if (q.categoryId) params.categoryId = q.categoryId;
+    if (q.vehicleTypeId) params.vehicleTypeId = q.vehicleTypeId;
     return params;
   }, []);
 
@@ -98,7 +92,7 @@ export function useList<T>(
 
   const setQuery = useCallback((patch: Partial<ListQuery>) => {
     setQueryState((prev) => {
-      const next = { ...prev, ...patch };
+      const next: ListQuery = { ...prev, ...patch };
       // أي تغيير غير رقم الصفحة يعيد الترقيم للصفحة الأولى.
       if (!("page" in patch)) next.page = 1;
       return next;
