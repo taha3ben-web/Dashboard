@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { Autocomplete } from "@react-google-maps/api";
+import { Autocomplete } from "@/components/map/GoogleMaps";
 import { Search } from "lucide-react";
 import type { LatLngLiteral } from "@/lib/googleMaps";
 

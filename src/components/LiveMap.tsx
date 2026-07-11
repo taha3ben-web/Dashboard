@@ -1,7 +1,7 @@
 "use client";
 
 import { CSSProperties, useMemo } from "react";
-import { GoogleMap, Marker } from "@react-google-maps/api";
+import { GoogleMap, Marker } from "@/components/map/GoogleMaps";
 import {
   DEFAULT_CENTER,
   useGoogleMaps,

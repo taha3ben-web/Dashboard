@@ -1,7 +1,7 @@
 "use client";
 
 import { CSSProperties, useCallback, useMemo, useRef, useState } from "react";
-import { GoogleMap, Polygon, Marker } from "@react-google-maps/api";
+import { GoogleMap, Polygon, Marker } from "@/components/map/GoogleMaps";
 import clsx from "clsx";
 import {
   ArchiveRestore,

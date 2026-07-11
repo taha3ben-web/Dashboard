@@ -1,6 +1,6 @@
 "use client";
 
-import { useJsApiLoader } from "@react-google-maps/api";
+import { useEffect, useState } from "react";
 
 /**
  * طبقة Google Maps المشتركة للوحة — Google Maps فقط (بلا Leaflet/OSM/MapLibre).
@@ -33,17 +33,77 @@ export function googleMapsApiKey(): string {
 }
 
 /** خطّاف تحميل Google Maps JS API (يُدار مرّة واحدة عبر اللوحة). */
+let loaderPromise: Promise<void> | null = null;
+
+function loadGoogleMaps(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (window.google?.maps) return Promise.resolve();
+  if (loaderPromise) return loaderPromise;
+
+  loaderPromise = new Promise<void>((resolve, reject) => {
+    const key = googleMapsApiKey();
+    if (!key) {
+      reject(new Error("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is missing"));
+      return;
+    }
+    const existing = document.getElementById(
+      GOOGLE_MAPS_LOADER_ID,
+    ) as HTMLScriptElement | null;
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("Google Maps script failed to load")),
+        { once: true },
+      );
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = GOOGLE_MAPS_LOADER_ID;
+    script.async = true;
+    script.defer = true;
+    const params = new URLSearchParams({
+      key,
+      libraries: GOOGLE_MAPS_LIBRARIES.join(","),
+      language: "ar",
+      region: "DZ",
+      v: "weekly",
+    });
+    script.src = "https://maps.googleapis.com/maps/api/js?" + params.toString();
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Google Maps script failed to load"));
+    document.head.appendChild(script);
+  });
+  return loaderPromise;
+}
+
 export function useGoogleMaps(): {
   isLoaded: boolean;
   loadError: Error | undefined;
 } {
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: GOOGLE_MAPS_LOADER_ID,
-    googleMapsApiKey: googleMapsApiKey(),
-    libraries: GOOGLE_MAPS_LIBRARIES,
-    language: "ar",
-    region: "DZ",
-  });
+  const [isLoaded, setIsLoaded] = useState(
+    () => typeof window !== "undefined" && Boolean(window.google?.maps),
+  );
+  const [loadError, setLoadError] = useState<Error>();
+
+  useEffect(() => {
+    let active = true;
+    void loadGoogleMaps()
+      .then(() => {
+        if (active) setIsLoaded(true);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setLoadError(
+            error instanceof Error ? error : new Error(String(error)),
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return { isLoaded, loadError };
 }
 
