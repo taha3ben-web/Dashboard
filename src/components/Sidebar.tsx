@@ -15,6 +15,12 @@ import {
   LifeBuoy,
   Settings,
   Smartphone,
+  Layers,
+  Sparkles,
+  MapPin,
+  DollarSign,
+  BarChart3,
+  Boxes,
 } from "lucide-react";
 
 const LINKS = [
@@ -31,12 +37,31 @@ const LINKS = [
   { href: "/settings", label: "الإعدادات", icon: Settings },
 ];
 
+// قسم الكتالوج (التحكم الديناميكي بالمركبات دون تحديث التطبيقات).
+const CATALOG_LINKS = [
+  { href: "/catalog/categories", label: "الفئات", icon: Layers },
+  { href: "/catalog/vehicle-types", label: "الأنواع", icon: Car },
+  { href: "/catalog/features", label: "الميزات", icon: Sparkles },
+  { href: "/catalog/service-areas", label: "مناطق الخدمة", icon: MapPin },
+  { href: "/catalog/pricing", label: "التسعير", icon: DollarSign },
+  { href: "/catalog/analytics", label: "التحليلات", icon: BarChart3 },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
+
+  const linkClass = (active: boolean) =>
+    clsx(
+      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
+      active
+        ? "bg-brand text-white"
+        : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800",
+    );
+
   return (
-    <aside className="hidden w-64 shrink-0 border-l border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 md:block">
+    <aside className="hidden w-64 shrink-0 overflow-y-auto border-l border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 md:block">
       <div className="mb-6 flex items-center gap-2 px-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-white font-bold">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand font-bold text-white">
           N
         </div>
         <span className="text-lg font-bold">NOVA Ride</span>
@@ -45,25 +70,32 @@ export function Sidebar() {
         {LINKS.map((link) => {
           const Icon = link.icon;
           const active =
-            link.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(link.href);
+            link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
           return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={clsx(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
-                active
-                  ? "bg-brand text-white"
-                  : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800",
-              )}
-            >
+            <Link key={link.href} href={link.href} className={linkClass(active)}>
               <Icon size={18} />
               {link.label}
             </Link>
           );
         })}
+
+        {/* قسم الكتالوج */}
+        <div className="pt-4">
+          <div className="mb-1 flex items-center gap-2 px-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <Boxes size={14} />
+            الكتالوج
+          </div>
+          {CATALOG_LINKS.map((link) => {
+            const Icon = link.icon;
+            const active = pathname.startsWith(link.href);
+            return (
+              <Link key={link.href} href={link.href} className={linkClass(active)}>
+                <Icon size={18} />
+                {link.label}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </aside>
   );
