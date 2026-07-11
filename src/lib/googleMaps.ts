@@ -18,12 +18,9 @@ export interface GeoJSONPolygon {
 }
 
 // مكتبات Google المطلوبة (ثابتة المرجع لمنع إعادة التحميل).
-export type MapLibrary = "places" | "drawing" | "geometry";
-export const GOOGLE_MAPS_LIBRARIES: MapLibrary[] = [
-  "places",
-  "drawing",
-  "geometry",
-];
+// places للبحث عن المدن/العناوين. الرسم يتم يدويًا بالنقر دون مكتبة drawing.
+export type MapLibrary = "places";
+export const GOOGLE_MAPS_LIBRARIES: MapLibrary[] = ["places"];
 export const GOOGLE_MAPS_LOADER_ID = "nova-google-maps-loader";
 
 // مركز افتراضي: الجزائر العاصمة.
@@ -50,7 +47,7 @@ export function useGoogleMaps(): {
   return { isLoaded, loadError };
 }
 
-/** يحوّل مسار مضلّع Google إلى GeoJSON Polygon (حلقة مغلقة). */
+/** يحوّل مسار مضلّع إلى GeoJSON Polygon (حلقة مغلقة). */
 export function pathToGeoJSON(path: LatLngLiteral[]): GeoJSONPolygon | null {
   if (path.length < 3) return null;
   const ring: number[][] = path.map((p) => [p.lng, p.lat]);
@@ -62,12 +59,18 @@ export function pathToGeoJSON(path: LatLngLiteral[]): GeoJSONPolygon | null {
   return { type: "Polygon", coordinates: [ring] };
 }
 
-/** يحوّل GeoJSON المخزّن إلى مسار Google صالح للعرض/التحرير. */
-export function geoJSONToPath(geojson: unknown): LatLngLiteral[] {
-  if (!geojson || typeof geojson !== "object") return [];
-  const g = geojson as { type?: unknown; coordinates?: unknown };
-  if (g.type !== "Polygon" || !Array.isArray(g.coordinates)) return [];
-  const ring = g.coordinates[0];
+/** يحوّل GeoJSON المخزّن إلى مسار صالح للعرض/التحرير. */
+export function geoJSONToPath(
+  geojson: GeoJSONPolygon | null | undefined,
+): LatLngLiteral[] {
+  if (
+    !geojson ||
+    geojson.type !== "Polygon" ||
+    !Array.isArray(geojson.coordinates)
+  ) {
+    return [];
+  }
+  const ring = geojson.coordinates[0];
   if (!Array.isArray(ring)) return [];
   const path: LatLngLiteral[] = [];
   for (const point of ring) {

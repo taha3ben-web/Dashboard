@@ -1,10 +1,11 @@
 "use client";
 
 import { CSSProperties, useCallback, useMemo, useRef, useState } from "react";
-import { GoogleMap, Polygon, DrawingManager } from "@react-google-maps/api";
+import { GoogleMap, Polygon, Marker } from "@react-google-maps/api";
 import clsx from "clsx";
 import {
   ArchiveRestore,
+  Check,
   Edit3,
   History,
   MapPin,
@@ -45,17 +46,14 @@ const MAP_OPTIONS: google.maps.MapOptions = {
   clickableIcons: false,
 };
 
-const DRAW_POLYGON_OPTIONS: google.maps.PolygonOptions = {
+// خيارات مضلّع الرسم الجارٍ (نوع أساسي من google.maps فقط).
+const DRAFT_POLY_OPTIONS: google.maps.PolygonOptions = {
   fillColor: "#4f46e5",
-  fillOpacity: 0.3,
+  fillOpacity: 0.25,
   strokeColor: "#4f46e5",
   strokeWeight: 2,
-  editable: true,
-  zIndex: 20,
-};
-const DRAW_MANAGER_OPTIONS: google.maps.drawing.DrawingManagerOptions = {
-  drawingControl: false,
-  polygonOptions: DRAW_POLYGON_OPTIONS,
+  clickable: false,
+  zIndex: 30,
 };
 
 interface FormState {
@@ -79,10 +77,12 @@ function toForm(s: ServiceArea): FormState {
 }
 
 function errMessage(e: unknown): string {
-  const msg = (e as { response?: { data?: { message?: string | string[] } } })
-    ?.response?.data?.message;
+  const res = (e as { response?: { data?: { message?: string | string[] } } })
+    .response;
+  const msg = res?.data?.message;
   if (Array.isArray(msg)) return msg.join("، ");
-  return msg ? String(msg) : "تعذّر تنفيذ الإجراء";
+  if (typeof msg === "string") return msg;
+  return "تعذّر تنفيذ الإجراء";
 }
 
 export default function ServiceAreasPage() {
@@ -95,7 +95,7 @@ export default function ServiceAreasPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawing, setDrawing] = useState(false);
-  const [draftPath, setDraftPath] = useState<LatLngLiteral[] | null>(null);
+  const [draftPath, setDraftPath] = useState<LatLngLiteral[]>([]);
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
@@ -116,21 +116,36 @@ export default function ServiceAreasPage() {
 
   const startDrawing = useCallback(() => {
     setSelectedId(null);
-    setDraftPath(null);
+    setDraftPath([]);
     setDrawing(true);
   }, []);
 
-  const handlePolygonComplete = useCallback((poly: google.maps.Polygon) => {
-    const path = poly
-      .getPath()
-      .getArray()
-      .map((ll) => ({ lat: ll.lat(), lng: ll.lng() }));
-    poly.setMap(null);
+  const cancelDrawing = useCallback(() => {
     setDrawing(false);
-    setDraftPath(path);
+    setDraftPath([]);
+  }, []);
+
+  const handleMapClick = useCallback(
+    (e: google.maps.MapMouseEvent) => {
+      if (!drawing) return;
+      const ll = e.latLng;
+      if (!ll) return;
+      const point: LatLngLiteral = { lat: ll.lat(), lng: ll.lng() };
+      setDraftPath((prev) => [...prev, point]);
+    },
+    [drawing],
+  );
+
+  const undoLastPoint = useCallback(() => {
+    setDraftPath((prev) => prev.slice(0, -1));
+  }, []);
+
+  const finishDrawing = useCallback(() => {
+    if (draftPath.length < 3) return;
+    setDrawing(false);
     setSaveErr("");
     setForm({ name: "", city: "", state: "", country: "", isActive: true });
-  }, []);
+  }, [draftPath.length]);
 
   async function save() {
     if (!form) return;
@@ -149,13 +164,13 @@ export default function ServiceAreasPage() {
           country: form.country.trim() || undefined,
         });
       } else {
-        const geojson = draftPath ? pathToGeoJSON(draftPath) : null;
+        const geojson = pathToGeoJSON(draftPath);
         if (!geojson) {
-          setSaveErr("ارسم حدود المنطقة على الخريطة أولاً");
+          setSaveErr("ارسم حدود المنطقة على الخريطة (٣ نقاط على الأقل)");
           setSaving(false);
           return;
         }
-        const c = draftPath ? pathCentroid(draftPath) : null;
+        const c = pathCentroid(draftPath);
         await api.post("/service-areas", {
           name: form.name.trim(),
           city: form.city.trim() || undefined,
@@ -169,7 +184,7 @@ export default function ServiceAreasPage() {
         });
       }
       setForm(null);
-      setDraftPath(null);
+      setDraftPath([]);
       reload();
     } catch (e: unknown) {
       setSaveErr(errMessage(e));
@@ -233,8 +248,8 @@ export default function ServiceAreasPage() {
         fillOpacity: selected ? 0.35 : 0.18,
         strokeColor: color,
         strokeWeight: selected ? 3 : 2,
-        clickable: true,
-        editable: selected,
+        clickable: !drawing,
+        editable: selected && !drawing,
         draggable: false,
         zIndex: selected ? 10 : 1,
       };
@@ -247,11 +262,20 @@ export default function ServiceAreasPage() {
           paths={path}
           options={opts}
           onLoad={handleLoad}
-          onClick={() => setSelectedId(a.id)}
+          onClick={() => {
+            if (!drawing) setSelectedId(a.id);
+          }}
         />
       );
     });
-  }, [data, selectedId, isLoaded]);
+  }, [data, selectedId, isLoaded, drawing]);
+
+  const draftMarkers = useMemo(() => {
+    if (!drawing) return null;
+    return draftPath.map((p, idx) => (
+      <Marker key={`draft-${idx}`} position={p} label={String(idx + 1)} />
+    ));
+  }, [drawing, draftPath]);
 
   const selectedArea = useMemo(
     () => data.find((a) => a.id === selectedId) ?? null,
@@ -306,7 +330,9 @@ export default function ServiceAreasPage() {
                 </p>
               ) : (
                 data.map((s, i) => {
-                  const dotStyle: CSSProperties = { backgroundColor: areaColor(i) };
+                  const dotStyle: CSSProperties = {
+                    backgroundColor: areaColor(i),
+                  };
                   const active = s.id === selectedId;
                   return (
                     <div
@@ -407,12 +433,31 @@ export default function ServiceAreasPage() {
                 <div className="absolute left-3 right-3 top-3 z-10 flex flex-wrap items-center gap-2">
                   <PlacesSearch onSelect={(loc) => focusLocation(loc)} />
                   {drawing ? (
-                    <button
-                      onClick={() => setDrawing(false)}
-                      className="flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white shadow hover:bg-amber-600"
-                    >
-                      <X size={16} /> إلغاء الرسم
-                    </button>
+                    <>
+                      <button
+                        onClick={finishDrawing}
+                        disabled={draftPath.length < 3}
+                        className="flex items-center gap-1 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white shadow hover:bg-brand-dark disabled:opacity-50"
+                      >
+                        <Check size={16} /> إنهاء الرسم ({draftPath.length})
+                      </button>
+                      <button
+                        onClick={undoLastPoint}
+                        disabled={draftPath.length === 0}
+                        className="flex items-center gap-1 rounded-lg border border-gray-300 bg-white/95 px-3 py-2 text-sm shadow disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900/95"
+                      >
+                        تراجع
+                      </button>
+                      <button
+                        onClick={cancelDrawing}
+                        className="flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white shadow hover:bg-amber-600"
+                      >
+                        <X size={16} /> إلغاء
+                      </button>
+                      <span className="rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-600 shadow dark:bg-gray-900/95 dark:text-gray-300">
+                        انقر على الخريطة لإضافة رؤوس المنطقة (٣ نقاط على الأقل).
+                      </span>
+                    </>
                   ) : (
                     <button
                       onClick={startDrawing}
@@ -421,11 +466,6 @@ export default function ServiceAreasPage() {
                       <Plus size={16} /> رسم منطقة
                     </button>
                   )}
-                  {drawing ? (
-                    <span className="rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-600 shadow dark:bg-gray-900/95 dark:text-gray-300">
-                      انقر على الخريطة لإضافة رؤوس المضلّع، ثم أغلقه.
-                    </span>
-                  ) : null}
                 </div>
 
                 <GoogleMap
@@ -434,24 +474,22 @@ export default function ServiceAreasPage() {
                   zoom={DEFAULT_ZOOM}
                   options={MAP_OPTIONS}
                   onLoad={onMapLoad}
+                  onClick={handleMapClick}
                 >
                   {polygons}
-                  {drawing ? (
-                    <DrawingManager
-                      options={DRAW_MANAGER_OPTIONS}
-                      drawingMode={google.maps.drawing.OverlayType.POLYGON}
-                      onPolygonComplete={handlePolygonComplete}
-                    />
+                  {drawing && draftPath.length >= 2 ? (
+                    <Polygon paths={draftPath} options={DRAFT_POLY_OPTIONS} />
                   ) : null}
+                  {draftMarkers}
                 </GoogleMap>
 
-                {selectedArea ? (
+                {selectedArea && !drawing ? (
                   <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/95 px-4 py-3 shadow-lg dark:bg-gray-900/95">
                     <div className="flex items-center gap-2 text-sm">
                       <MapPin size={16} className="text-brand" />
                       <span className="font-medium">{selectedArea.name}</span>
                       <span className="text-xs text-gray-400">
-                        عدّل رؤوس المضلّع ثم احفظ الحدود.
+                        اسحب رؤوس المضلّع لتعديل الحدود ثم احفظ.
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -482,7 +520,7 @@ export default function ServiceAreasPage() {
         open={form !== null}
         onClose={() => {
           setForm(null);
-          setDraftPath(null);
+          setDraftPath([]);
         }}
         title={form?.id ? "تعديل بيانات المنطقة" : "منطقة جديدة"}
         footer={
@@ -490,7 +528,7 @@ export default function ServiceAreasPage() {
             <button
               onClick={() => {
                 setForm(null);
-                setDraftPath(null);
+                setDraftPath([]);
               }}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm dark:border-gray-700"
             >
@@ -510,7 +548,8 @@ export default function ServiceAreasPage() {
           <div className="space-y-4">
             {!form.id ? (
               <div className="rounded-lg bg-brand/5 p-3 text-xs text-brand">
-                تم رسم حدود المنطقة على الخريطة. أكمِل البيانات للحفظ.
+                تم رسم حدود المنطقة على الخريطة ({draftPath.length} نقطة).
+                أكمِل البيانات للحفظ.
               </div>
             ) : null}
             <Labeled label="اسم المنطقة">

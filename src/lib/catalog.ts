@@ -178,7 +178,7 @@ export interface ServiceArea {
   city?: string | null;
   state?: string | null;
   country?: string | null;
-  geojson?: Record<string, unknown> | null;
+  geojson?: { type: "Polygon"; coordinates: number[][][] } | null;
   provider: string;
   providerRef?: Record<string, unknown> | null;
   centerLat?: number | null;
