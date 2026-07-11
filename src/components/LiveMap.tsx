@@ -1,8 +1,12 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
-import { useMemo, CSSProperties } from "react";
+import { CSSProperties, useMemo } from "react";
+import { GoogleMap, Marker } from "@react-google-maps/api";
+import {
+  DEFAULT_CENTER,
+  useGoogleMaps,
+  type LatLngLiteral,
+} from "@/lib/googleMaps";
 
 export interface MapDriver {
   id: string;
@@ -12,63 +16,78 @@ export interface MapDriver {
   busy?: boolean;
 }
 
-// رابط بلاطات OpenStreetMap المجانية
-const OSM_TILE_URL = "https://" + "{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-
-// أيقونة سائق ملوّنة حسب الحالة (أخضر=متاح، برتقالي=مشغول)
-function carIcon(busy: boolean): L.DivIcon {
-  const color = busy ? "#f59e0b" : "#22c55e";
-  const html =
-    '<div style="background:' +
-    color +
-    ';width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,.4)"></div>';
-  return L.divIcon({
-    className: "",
-    html,
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
-  });
-}
-
 interface Props {
   drivers: MapDriver[];
-  center?: [number, number];
+  center?: LatLngLiteral;
   zoom?: number;
   height?: string;
 }
 
+const MAP_OPTIONS: google.maps.MapOptions = {
+  streetViewControl: false,
+  mapTypeControl: false,
+  fullscreenControl: true,
+  clickableIcons: false,
+};
+
 export default function LiveMap(props: Props) {
+  const { isLoaded, loadError } = useGoogleMaps();
   const drivers = props.drivers;
-  const center = props.center ?? [36.7538, 3.0588];
+  const center = props.center ?? DEFAULT_CENTER;
   const zoom = props.zoom ?? 12;
   const height = props.height ?? "420px";
+  const containerStyle: CSSProperties = { width: "100%", height };
 
-  const wrapperStyle: CSSProperties = { height };
+  const markers = useMemo(() => {
+    if (!isLoaded) return null;
+    return drivers.map((d) => {
+      const pos: google.maps.LatLngLiteral = { lat: d.lat, lng: d.lng };
+      const icon: google.maps.Symbol = {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 7,
+        fillColor: d.busy ? "#f59e0b" : "#22c55e",
+        fillOpacity: 1,
+        strokeColor: "#ffffff",
+        strokeWeight: 2,
+      };
+      const title = `السائق ${d.id.slice(0, 8)} — ${
+        d.busy ? "مشغول" : "متاح"
+      }`;
+      return <Marker key={d.id} position={pos} title={title} icon={icon} />;
+    });
+  }, [drivers, isLoaded]);
 
-  const markers = useMemo(
-    () =>
-      drivers.map((d) => (
-        <Marker
-          key={d.id}
-          position={[d.lat, d.lng]}
-          icon={carIcon(Boolean(d.busy))}
-        >
-          <Popup>
-            السائق: {d.id.slice(0, 8)}
-            <br />
-            الحالة: {d.busy ? "مشغول" : "متاح"}
-          </Popup>
-        </Marker>
-      )),
-    [drivers],
-  );
+  if (loadError) {
+    return (
+      <div
+        style={containerStyle}
+        className="flex items-center justify-center rounded-xl bg-red-500/10 text-sm text-red-500"
+      >
+        تعذّر تحميل خريطة Google — تأكّد من NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.
+      </div>
+    );
+  }
+  if (!isLoaded) {
+    return (
+      <div
+        style={containerStyle}
+        className="flex items-center justify-center rounded-xl bg-gray-100 text-sm text-gray-400 dark:bg-gray-800"
+      >
+        جارٍ تحميل الخريطة...
+      </div>
+    );
+  }
 
   return (
-    <div style={wrapperStyle} className="overflow-hidden rounded-xl">
-      <MapContainer center={center} zoom={zoom} scrollWheelZoom>
-        <TileLayer attribution="&copy; OpenStreetMap" url={OSM_TILE_URL} />
+    <div className="overflow-hidden rounded-xl">
+      <GoogleMap
+        mapContainerStyle={containerStyle}
+        center={center}
+        zoom={zoom}
+        options={MAP_OPTIONS}
+      >
         {markers}
-      </MapContainer>
+      </GoogleMap>
     </div>
   );
 }

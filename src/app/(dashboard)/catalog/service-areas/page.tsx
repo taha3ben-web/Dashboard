@@ -1,23 +1,62 @@
 "use client";
 
-import { useState } from "react";
-import { ArchiveRestore, Edit3, History, MapPin, Plus, Trash2 } from "lucide-react";
+import { CSSProperties, useCallback, useMemo, useRef, useState } from "react";
+import { GoogleMap, Polygon, DrawingManager } from "@react-google-maps/api";
+import clsx from "clsx";
+import {
+  ArchiveRestore,
+  Edit3,
+  History,
+  MapPin,
+  Plus,
+  Power,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Topbar } from "@/components/Topbar";
 import { api } from "@/lib/api";
-import { MAP_PROVIDERS, ServiceArea } from "@/lib/catalog";
+import { ServiceArea } from "@/lib/catalog";
 import { useList } from "@/hooks/useList";
-import { TableToolbar } from "@/components/catalog/TableToolbar";
-import { Pagination } from "@/components/catalog/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Toggle } from "@/components/ui/Toggle";
 import { AuditLog } from "@/components/catalog/AuditLog";
 import { FormRow, Labeled, inputCls } from "@/components/catalog/CatalogForm";
+import { PlacesSearch } from "@/components/map/PlacesSearch";
+import {
+  DEFAULT_CENTER,
+  DEFAULT_ZOOM,
+  areaColor,
+  geoJSONToPath,
+  pathCentroid,
+  pathToGeoJSON,
+  useGoogleMaps,
+  type LatLngLiteral,
+} from "@/lib/googleMaps";
 
-const SORT_OPTIONS = [
-  { value: "name", label: "الاسم" },
-  { value: "sortOrder", label: "الترتيب" },
-  { value: "createdAt", label: "تاريخ الإنشاء" },
-];
+const MAP_CONTAINER_STYLE: CSSProperties = { width: "100%", height: "100%" };
+const MAP_SECTION_STYLE: CSSProperties = { height: "72vh" };
+
+const MAP_OPTIONS: google.maps.MapOptions = {
+  streetViewControl: false,
+  mapTypeControl: true,
+  fullscreenControl: true,
+  clickableIcons: false,
+};
+
+const DRAW_POLYGON_OPTIONS: google.maps.PolygonOptions = {
+  fillColor: "#4f46e5",
+  fillOpacity: 0.3,
+  strokeColor: "#4f46e5",
+  strokeWeight: 2,
+  editable: true,
+  zIndex: 20,
+};
+const DRAW_MANAGER_OPTIONS: google.maps.drawing.DrawingManagerOptions = {
+  drawingControl: false,
+  polygonOptions: DRAW_POLYGON_OPTIONS,
+};
 
 interface FormState {
   id?: string;
@@ -25,23 +64,7 @@ interface FormState {
   city: string;
   state: string;
   country: string;
-  provider: string;
-  centerLat: string;
-  centerLng: string;
-  geojson: string;
-}
-
-function emptyForm(): FormState {
-  return {
-    name: "",
-    city: "",
-    state: "",
-    country: "",
-    provider: "GEOJSON",
-    centerLat: "",
-    centerLng: "",
-    geojson: "",
-  };
+  isActive: boolean;
 }
 
 function toForm(s: ServiceArea): FormState {
@@ -51,57 +74,131 @@ function toForm(s: ServiceArea): FormState {
     city: s.city ?? "",
     state: s.state ?? "",
     country: s.country ?? "",
-    provider: s.provider,
-    centerLat: s.centerLat != null ? String(s.centerLat) : "",
-    centerLng: s.centerLng != null ? String(s.centerLng) : "",
-    geojson: s.geojson ? JSON.stringify(s.geojson, null, 2) : "",
+    isActive: s.isActive,
   };
 }
 
+function errMessage(e: unknown): string {
+  const msg = (e as { response?: { data?: { message?: string | string[] } } })
+    ?.response?.data?.message;
+  if (Array.isArray(msg)) return msg.join("، ");
+  return msg ? String(msg) : "تعذّر تنفيذ الإجراء";
+}
+
 export default function ServiceAreasPage() {
-  const { data, total, pages, loading, query, setQuery, reload } =
-    useList<ServiceArea>("/service-areas", { sortBy: "sortOrder" });
+  const { isLoaded, loadError } = useGoogleMaps();
+  const { data, total, loading, query, setQuery, reload } =
+    useList<ServiceArea>("/service-areas", { sortBy: "sortOrder", limit: 100 });
+
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const selectedPolyRef = useRef<google.maps.Polygon | null>(null);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [draftPath, setDraftPath] = useState<LatLngLiteral[] | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+  const [geoSaving, setGeoSaving] = useState(false);
   const [confirm, setConfirm] = useState<ServiceArea | null>(null);
   const [auditFor, setAuditFor] = useState<ServiceArea | null>(null);
 
+  const onMapLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
+
+  const focusLocation = useCallback((loc: LatLngLiteral) => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.panTo(loc);
+    map.setZoom(13);
+  }, []);
+
+  const startDrawing = useCallback(() => {
+    setSelectedId(null);
+    setDraftPath(null);
+    setDrawing(true);
+  }, []);
+
+  const handlePolygonComplete = useCallback((poly: google.maps.Polygon) => {
+    const path = poly
+      .getPath()
+      .getArray()
+      .map((ll) => ({ lat: ll.lat(), lng: ll.lng() }));
+    poly.setMap(null);
+    setDrawing(false);
+    setDraftPath(path);
+    setSaveErr("");
+    setForm({ name: "", city: "", state: "", country: "", isActive: true });
+  }, []);
+
   async function save() {
     if (!form) return;
-    if (!form.name.trim()) return setSaveErr("اسم المنطقة مطلوب");
-    let geojson: unknown;
-    if (form.geojson.trim()) {
-      try {
-        geojson = JSON.parse(form.geojson);
-      } catch {
-        return setSaveErr("صيغة GeoJSON غير صالحة");
-      }
+    if (!form.name.trim()) {
+      setSaveErr("اسم المنطقة مطلوب");
+      return;
     }
     setSaving(true);
     setSaveErr("");
-    const body: Record<string, unknown> = {
-      name: form.name.trim(),
-      city: form.city.trim() || undefined,
-      state: form.state.trim() || undefined,
-      country: form.country.trim() || undefined,
-      provider: form.provider,
-      centerLat: form.centerLat ? Number(form.centerLat) : undefined,
-      centerLng: form.centerLng ? Number(form.centerLng) : undefined,
-      geojson: geojson ?? undefined,
-    };
     try {
-      if (form.id) await api.patch(`/service-areas/${form.id}`, body);
-      else await api.post("/service-areas", body);
+      if (form.id) {
+        await api.patch(`/service-areas/${form.id}`, {
+          name: form.name.trim(),
+          city: form.city.trim() || undefined,
+          state: form.state.trim() || undefined,
+          country: form.country.trim() || undefined,
+        });
+      } else {
+        const geojson = draftPath ? pathToGeoJSON(draftPath) : null;
+        if (!geojson) {
+          setSaveErr("ارسم حدود المنطقة على الخريطة أولاً");
+          setSaving(false);
+          return;
+        }
+        const c = draftPath ? pathCentroid(draftPath) : null;
+        await api.post("/service-areas", {
+          name: form.name.trim(),
+          city: form.city.trim() || undefined,
+          state: form.state.trim() || undefined,
+          country: form.country.trim() || undefined,
+          provider: "GOOGLE",
+          geojson,
+          centerLat: c ? c.lat : undefined,
+          centerLng: c ? c.lng : undefined,
+          isActive: form.isActive,
+        });
+      }
       setForm(null);
+      setDraftPath(null);
       reload();
     } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { message?: string | string[] } } })
-          ?.response?.data?.message ?? "تعذّر الحفظ";
-      setSaveErr(Array.isArray(msg) ? msg.join("، ") : String(msg));
+      setSaveErr(errMessage(e));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveGeometry() {
+    const poly = selectedPolyRef.current;
+    if (!poly || !selectedId) return;
+    const path = poly
+      .getPath()
+      .getArray()
+      .map((ll) => ({ lat: ll.lat(), lng: ll.lng() }));
+    const geojson = pathToGeoJSON(path);
+    if (!geojson) return;
+    const c = pathCentroid(path);
+    setGeoSaving(true);
+    try {
+      await api.patch(`/service-areas/${selectedId}`, {
+        geojson,
+        centerLat: c ? c.lat : undefined,
+        centerLng: c ? c.lng : undefined,
+        provider: "GOOGLE",
+      });
+      reload();
+    } finally {
+      setGeoSaving(false);
     }
   }
 
@@ -114,153 +211,287 @@ export default function ServiceAreasPage() {
     reload();
   }
 
+  const selectArea = useCallback(
+    (s: ServiceArea) => {
+      setSelectedId(s.id);
+      if (s.centerLat != null && s.centerLng != null) {
+        focusLocation({ lat: s.centerLat, lng: s.centerLng });
+      }
+    },
+    [focusLocation],
+  );
+
+  const polygons = useMemo(() => {
+    if (!isLoaded) return null;
+    return data.map((a, i) => {
+      const path = geoJSONToPath(a.geojson);
+      if (path.length < 3) return null;
+      const selected = a.id === selectedId;
+      const color = areaColor(i);
+      const opts: google.maps.PolygonOptions = {
+        fillColor: color,
+        fillOpacity: selected ? 0.35 : 0.18,
+        strokeColor: color,
+        strokeWeight: selected ? 3 : 2,
+        clickable: true,
+        editable: selected,
+        draggable: false,
+        zIndex: selected ? 10 : 1,
+      };
+      const handleLoad = (p: google.maps.Polygon) => {
+        if (selected) selectedPolyRef.current = p;
+      };
+      return (
+        <Polygon
+          key={a.id}
+          paths={path}
+          options={opts}
+          onLoad={handleLoad}
+          onClick={() => setSelectedId(a.id)}
+        />
+      );
+    });
+  }, [data, selectedId, isLoaded]);
+
+  const selectedArea = useMemo(
+    () => data.find((a) => a.id === selectedId) ?? null,
+    [data, selectedId],
+  );
+
   return (
     <div>
       <Topbar title="مناطق الخدمة" />
       <div className="p-4">
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            نطاقات جغرافية مستقلة عن مزوّد الخرائط (GeoJSON أو مزوّد خارجي).
-          </p>
-          <button
-            onClick={() => {
-              setSaveErr("");
-              setForm(emptyForm());
-            }}
-            className="flex items-center gap-1 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-          >
-            <Plus size={16} /> منطقة جديدة
-          </button>
-        </div>
+        <p className="mb-3 text-sm text-gray-500">
+          أدِر نطاقات الخدمة مباشرة على خريطة Google: ارسم الحدود، عدّل
+          الرؤوس، وابحث عن أي مدينة أو عنوان.
+        </p>
 
-        <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-          <TableToolbar
-            search={query.search}
-            onSearch={(v) => setQuery({ search: v })}
-            sortBy={query.sortBy}
-            sortOrder={query.sortOrder}
-            onSort={(by, order) => setQuery({ sortBy: by, sortOrder: order })}
-            sortOptions={SORT_OPTIONS}
-            showStatus={false}
-            activeOnly={query.activeOnly}
-            onActiveOnly={(v) => setQuery({ activeOnly: v })}
-            includeDeleted={query.includeDeleted}
-            onIncludeDeleted={(v) => setQuery({ includeDeleted: v })}
-            onReload={reload}
-          />
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-sm">
-              <thead className="border-b border-gray-200 text-xs text-gray-400 dark:border-gray-800">
-                <tr>
-                  <th className="px-4 py-3 font-medium">المنطقة</th>
-                  <th className="px-4 py-3 font-medium">المدينة</th>
-                  <th className="px-4 py-3 font-medium">المزوّد</th>
-                  <th className="px-4 py-3 font-medium">نشط</th>
-                  <th className="px-4 py-3 font-medium">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="py-10 text-center text-gray-400">
-                      جارٍ التحميل...
-                    </td>
-                  </tr>
-                ) : data.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-10 text-center text-gray-400">
-                      لا توجد مناطق.
-                    </td>
-                  </tr>
-                ) : (
-                  data.map((s) => (
-                    <tr
+        <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
+          {/* القائمة الجانبية */}
+          <aside className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+            <div className="border-b border-gray-200 p-3 dark:border-gray-800">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-bold">المناطق ({total})</h2>
+                <button
+                  onClick={startDrawing}
+                  className="flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-dark"
+                >
+                  <Plus size={14} /> رسم جديد
+                </button>
+              </div>
+              <input
+                value={query.search}
+                onChange={(e) => setQuery({ search: e.target.value })}
+                placeholder="بحث بالاسم..."
+                className={inputCls}
+              />
+              <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-gray-500">
+                <input
+                  type="checkbox"
+                  checked={query.includeDeleted}
+                  onChange={(e) => setQuery({ includeDeleted: e.target.checked })}
+                />
+                إظهار المؤرشفة
+              </label>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto">
+              {loading ? (
+                <p className="p-4 text-center text-sm text-gray-400">
+                  جارٍ التحميل...
+                </p>
+              ) : data.length === 0 ? (
+                <p className="p-4 text-center text-sm text-gray-400">
+                  لا توجد مناطق بعد. ابدأ برسم منطقة.
+                </p>
+              ) : (
+                data.map((s, i) => {
+                  const dotStyle: CSSProperties = { backgroundColor: areaColor(i) };
+                  const active = s.id === selectedId;
+                  return (
+                    <div
                       key={s.id}
-                      className="border-b border-gray-100 last:border-0 dark:border-gray-800/60"
+                      className={clsx(
+                        "flex items-center gap-2 border-b border-gray-100 px-3 py-2 last:border-0 dark:border-gray-800/60",
+                        active && "bg-brand/5",
+                      )}
                     >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <MapPin size={16} className="text-brand" />
-                          <span className="font-medium">{s.name}</span>
-                          {s.deletedAt ? (
-                            <span className="text-[11px] text-red-500">مؤرشفة</span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500">{s.city || "—"}</td>
-                      <td className="px-4 py-3 text-gray-500">{s.provider}</td>
-                      <td className="px-4 py-3">
+                      <button
+                        onClick={() => selectArea(s)}
+                        className="flex flex-1 items-center gap-2 text-right"
+                      >
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full"
+                          style={dotStyle}
+                        />
+                        <span className="flex-1">
+                          <span className="block text-sm font-medium">
+                            {s.name}
+                          </span>
+                          <span className="block text-xs text-gray-400">
+                            {s.city || "—"}
+                          </span>
+                        </span>
+                        {s.deletedAt ? (
+                          <span className="text-[10px] text-red-500">مؤرشفة</span>
+                        ) : !s.isActive ? (
+                          <span className="text-[10px] text-amber-500">موقوفة</span>
+                        ) : null}
+                      </button>
+                      <div className="flex items-center gap-1 text-gray-400">
                         <button
+                          title="تفعيل/إيقاف"
                           onClick={() => toggleActive(s)}
-                          className={s.isActive ? "text-green-600" : "text-gray-400"}
+                          className={s.isActive ? "text-green-600" : ""}
                         >
-                          {s.isActive ? "مفعّل" : "موقوف"}
+                          <Power size={15} />
                         </button>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 text-gray-400">
+                        <button
+                          title="تعديل البيانات"
+                          onClick={() => {
+                            setSaveErr("");
+                            setForm(toForm(s));
+                          }}
+                          className="hover:text-brand"
+                        >
+                          <Edit3 size={15} />
+                        </button>
+                        <button
+                          title="سجل التعديلات"
+                          onClick={() => setAuditFor(s)}
+                          className="hover:text-brand"
+                        >
+                          <History size={15} />
+                        </button>
+                        {s.deletedAt ? (
                           <button
-                            title="تعديل"
-                            onClick={() => {
-                              setSaveErr("");
-                              setForm(toForm(s));
-                            }}
-                            className="hover:text-brand"
+                            title="استعادة"
+                            onClick={() => restore(s)}
+                            className="hover:text-green-600"
                           >
-                            <Edit3 size={16} />
+                            <ArchiveRestore size={15} />
                           </button>
+                        ) : (
                           <button
-                            title="سجل التعديلات"
-                            onClick={() => setAuditFor(s)}
-                            className="hover:text-brand"
+                            title="أرشفة"
+                            onClick={() => setConfirm(s)}
+                            className="hover:text-red-600"
                           >
-                            <History size={16} />
+                            <Trash2 size={15} />
                           </button>
-                          {s.deletedAt ? (
-                            <button
-                              title="استعادة"
-                              onClick={() => restore(s)}
-                              className="hover:text-green-600"
-                            >
-                              <ArchiveRestore size={16} />
-                            </button>
-                          ) : (
-                            <button
-                              title="أرشفة"
-                              onClick={() => setConfirm(s)}
-                              className="hover:text-red-600"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          <Pagination
-            page={query.page}
-            pages={pages}
-            total={total}
-            limit={query.limit}
-            onPage={(p) => setQuery({ page: p })}
-            onLimit={(l) => setQuery({ limit: l })}
-          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+
+          {/* الخريطة */}
+          <section
+            style={MAP_SECTION_STYLE}
+            className="relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800"
+          >
+            {loadError ? (
+              <div className="flex h-full items-center justify-center bg-red-500/10 p-6 text-center text-sm text-red-500">
+                تعذّر تحميل خريطة Google. تأكّد من ضبط
+                NEXT_PUBLIC_GOOGLE_MAPS_API_KEY وتفعيل Maps JavaScript API.
+              </div>
+            ) : !isLoaded ? (
+              <div className="flex h-full items-center justify-center bg-gray-100 text-sm text-gray-400 dark:bg-gray-800">
+                جارٍ تحميل الخريطة...
+              </div>
+            ) : (
+              <>
+                <div className="absolute left-3 right-3 top-3 z-10 flex flex-wrap items-center gap-2">
+                  <PlacesSearch onSelect={(loc) => focusLocation(loc)} />
+                  {drawing ? (
+                    <button
+                      onClick={() => setDrawing(false)}
+                      className="flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white shadow hover:bg-amber-600"
+                    >
+                      <X size={16} /> إلغاء الرسم
+                    </button>
+                  ) : (
+                    <button
+                      onClick={startDrawing}
+                      className="flex items-center gap-1 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white shadow hover:bg-brand-dark"
+                    >
+                      <Plus size={16} /> رسم منطقة
+                    </button>
+                  )}
+                  {drawing ? (
+                    <span className="rounded-lg bg-white/95 px-3 py-2 text-xs text-gray-600 shadow dark:bg-gray-900/95 dark:text-gray-300">
+                      انقر على الخريطة لإضافة رؤوس المضلّع، ثم أغلقه.
+                    </span>
+                  ) : null}
+                </div>
+
+                <GoogleMap
+                  mapContainerStyle={MAP_CONTAINER_STYLE}
+                  center={DEFAULT_CENTER}
+                  zoom={DEFAULT_ZOOM}
+                  options={MAP_OPTIONS}
+                  onLoad={onMapLoad}
+                >
+                  {polygons}
+                  {drawing ? (
+                    <DrawingManager
+                      options={DRAW_MANAGER_OPTIONS}
+                      drawingMode={google.maps.drawing.OverlayType.POLYGON}
+                      onPolygonComplete={handlePolygonComplete}
+                    />
+                  ) : null}
+                </GoogleMap>
+
+                {selectedArea ? (
+                  <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/95 px-4 py-3 shadow-lg dark:bg-gray-900/95">
+                    <div className="flex items-center gap-2 text-sm">
+                      <MapPin size={16} className="text-brand" />
+                      <span className="font-medium">{selectedArea.name}</span>
+                      <span className="text-xs text-gray-400">
+                        عدّل رؤوس المضلّع ثم احفظ الحدود.
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={saveGeometry}
+                        disabled={geoSaving}
+                        className="flex items-center gap-1 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+                      >
+                        <Save size={16} /> {geoSaving ? "جارٍ..." : "حفظ الحدود"}
+                      </button>
+                      <button
+                        onClick={() => setSelectedId(null)}
+                        className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700"
+                      >
+                        <X size={16} /> إلغاء التحديد
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </section>
         </div>
       </div>
 
+      {/* نافذة بيانات المنطقة */}
       <Modal
         open={form !== null}
-        onClose={() => setForm(null)}
-        title={form?.id ? "تعديل منطقة" : "منطقة جديدة"}
-        size="lg"
+        onClose={() => {
+          setForm(null);
+          setDraftPath(null);
+        }}
+        title={form?.id ? "تعديل بيانات المنطقة" : "منطقة جديدة"}
         footer={
           <>
             <button
-              onClick={() => setForm(null)}
+              onClick={() => {
+                setForm(null);
+                setDraftPath(null);
+              }}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm dark:border-gray-700"
             >
               إلغاء
@@ -277,10 +508,17 @@ export default function ServiceAreasPage() {
       >
         {form ? (
           <div className="space-y-4">
+            {!form.id ? (
+              <div className="rounded-lg bg-brand/5 p-3 text-xs text-brand">
+                تم رسم حدود المنطقة على الخريطة. أكمِل البيانات للحفظ.
+              </div>
+            ) : null}
             <Labeled label="اسم المنطقة">
               <input
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={(e) =>
+                  setForm((f) => (f ? { ...f, name: e.target.value } : f))
+                }
                 className={inputCls}
               />
             </Labeled>
@@ -288,14 +526,18 @@ export default function ServiceAreasPage() {
               <Labeled label="المدينة">
                 <input
                   value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  onChange={(e) =>
+                    setForm((f) => (f ? { ...f, city: e.target.value } : f))
+                  }
                   className={inputCls}
                 />
               </Labeled>
               <Labeled label="الولاية/المحافظة">
                 <input
                   value={form.state}
-                  onChange={(e) => setForm({ ...form, state: e.target.value })}
+                  onChange={(e) =>
+                    setForm((f) => (f ? { ...f, state: e.target.value } : f))
+                  }
                   className={inputCls}
                 />
               </Labeled>
@@ -304,57 +546,26 @@ export default function ServiceAreasPage() {
               <Labeled label="الدولة">
                 <input
                   value={form.country}
-                  onChange={(e) => setForm({ ...form, country: e.target.value })}
+                  onChange={(e) =>
+                    setForm((f) => (f ? { ...f, country: e.target.value } : f))
+                  }
                   className={inputCls}
                 />
               </Labeled>
-              <Labeled label="مزوّد الخرائط">
-                <select
-                  value={form.provider}
-                  onChange={(e) => setForm({ ...form, provider: e.target.value })}
-                  className={inputCls}
-                >
-                  {MAP_PROVIDERS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </Labeled>
+              {!form.id ? (
+                <Labeled label="الحالة">
+                  <Toggle
+                    checked={form.isActive}
+                    onChange={(v) =>
+                      setForm((f) => (f ? { ...f, isActive: v } : f))
+                    }
+                    label={form.isActive ? "مفعّلة" : "موقوفة"}
+                  />
+                </Labeled>
+              ) : (
+                <div />
+              )}
             </FormRow>
-            <FormRow>
-              <Labeled label="خط العرض (Lat)">
-                <input
-                  value={form.centerLat}
-                  onChange={(e) => setForm({ ...form, centerLat: e.target.value })}
-                  className={inputCls}
-                  dir="ltr"
-                  inputMode="decimal"
-                />
-              </Labeled>
-              <Labeled label="خط الطول (Lng)">
-                <input
-                  value={form.centerLng}
-                  onChange={(e) => setForm({ ...form, centerLng: e.target.value })}
-                  className={inputCls}
-                  dir="ltr"
-                  inputMode="decimal"
-                />
-              </Labeled>
-            </FormRow>
-            <Labeled
-              label="GeoJSON (اختياري)"
-              hint="الصق مضلع الحدود بصيغة GeoJSON. يعمل مع أي مزوّد خرائط."
-            >
-              <textarea
-                value={form.geojson}
-                onChange={(e) => setForm({ ...form, geojson: e.target.value })}
-                rows={5}
-                dir="ltr"
-                className={inputCls + " font-mono text-xs"}
-                placeholder='{"type":"Polygon","coordinates":[...]}'
-              />
-            </Labeled>
             {saveErr ? <p className="text-sm text-red-500">{saveErr}</p> : null}
           </div>
         ) : null}
@@ -366,7 +577,9 @@ export default function ServiceAreasPage() {
         title="أرشفة المنطقة"
         message={
           confirm ? (
-            <>ستتم أرشفة <b>{confirm.name}</b>. يمكن استعادتها لاحقًا.</>
+            <>
+              ستتم أرشفة <b>{confirm.name}</b>. يمكن استعادتها لاحقًا.
+            </>
           ) : (
             ""
           )
@@ -377,6 +590,7 @@ export default function ServiceAreasPage() {
           if (confirm) {
             await api.delete(`/service-areas/${confirm.id}`);
             setConfirm(null);
+            if (selectedId === confirm.id) setSelectedId(null);
             reload();
           }
         }}
@@ -387,7 +601,9 @@ export default function ServiceAreasPage() {
         onClose={() => setAuditFor(null)}
         title={`سجل التعديلات — ${auditFor ? auditFor.name : ""}`}
       >
-        {auditFor ? <AuditLog entity="ServiceArea" entityId={auditFor.id} /> : null}
+        {auditFor ? (
+          <AuditLog entity="ServiceArea" entityId={auditFor.id} />
+        ) : null}
       </Modal>
     </div>
   );
