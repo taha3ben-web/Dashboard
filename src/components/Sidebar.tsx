@@ -20,6 +20,7 @@ import {
   MapPin,
   DollarSign,
   BarChart3,
+  BookOpen,
   Boxes,
 } from "lucide-react";
 
@@ -30,6 +31,8 @@ const LINKS = [
   { href: "/trips", label: "الرحلات", icon: Route },
   { href: "/live-map", label: "الخريطة الحية", icon: Map },
   { href: "/earnings", label: "الأرباح", icon: Wallet },
+  { href: "/wallets", label: "الحسابات المالية", icon: BookOpen },
+  { href: "/reports", label: "التقارير", icon: BarChart3 },
   { href: "/coupons", label: "الكوبونات", icon: Ticket },
   { href: "/notifications", label: "الإشعارات", icon: Bell },
   { href: "/support", label: "الدعم الفني", icon: LifeBuoy },

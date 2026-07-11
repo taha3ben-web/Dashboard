@@ -50,7 +50,7 @@ export const CATALOG_DOMAINS = [
 ];
 
 export const ICON_TYPES = ["EMOJI", "PNG", "SVG", "ICON_PACK", "LOTTIE"];
-export const MAP_PROVIDERS = ["GEOJSON", "GOOGLE", "OSM", "MAPBOX"];
+export const MAP_PROVIDERS = ["GEOJSON", "GOOGLE"];
 
 export const FIELD_TYPES = [
   { value: "TEXT", label: "نص" },

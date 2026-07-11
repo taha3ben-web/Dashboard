@@ -118,7 +118,6 @@ export default function PricingPage() {
 
   useEffect(() => {
     if (initialType) setQuery({ vehicleTypeId: initialType });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialType]);
 
   useEffect(() => {

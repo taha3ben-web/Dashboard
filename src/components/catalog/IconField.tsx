@@ -94,7 +94,6 @@ export function IconField({
         <span className="text-xs text-gray-400">معاينة:</span>
         <IconPreview value={value} />
         {showImage && value.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={value.imageUrl}
             alt="preview"
@@ -136,7 +135,6 @@ export function IconPreview({
   }
   if (value.iconUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={value.iconUrl}
         alt="icon"

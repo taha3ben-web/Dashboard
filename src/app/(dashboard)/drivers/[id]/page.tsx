@@ -179,7 +179,6 @@ export default function DriverDetailPage() {
         <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
           <div className="flex flex-wrap items-center gap-4">
             {driver.user?.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={driver.user.avatarUrl}
                 alt=""
@@ -357,7 +356,7 @@ export default function DriverDetailPage() {
                   key={doc.id}
                   className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+
                   <a href={doc.url} target="_blank" rel="noreferrer">
                     <img
                       src={doc.url}
