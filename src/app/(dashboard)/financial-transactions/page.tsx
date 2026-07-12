@@ -30,7 +30,14 @@ interface LedgerTransactionRow {
 }
 
 const STATUS_OPTIONS = ["", "PENDING", "POSTED", "FAILED", "REVERSED", "CANCELLED"];
-const REFERENCE_TYPES = ["", "PAYMENT", "TRIP", "WITHDRAWAL"];
+const REFERENCE_TYPES = [
+  "",
+  "PAYMENT",
+  "TRIP",
+  "WITHDRAWAL",
+  "DRIVER_FUNDING",
+  "DRIVER_TRANSFER",
+];
 
 export default function FinancialTransactionsPage() {
   const [rows, setRows] = useState<LedgerTransactionRow[]>([]);

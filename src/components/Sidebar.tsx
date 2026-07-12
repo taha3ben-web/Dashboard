@@ -33,6 +33,7 @@ const LINKS = [
   { href: "/live-map", label: "الخريطة الحية", icon: Map },
   { href: "/earnings", label: "الأرباح", icon: Wallet },
   { href: "/wallets", label: "الحسابات المالية", icon: BookOpen },
+  { href: "/financial-dashboard", label: "لوحة المالية", icon: Wallet },
   { href: "/payments", label: "المدفوعات", icon: CreditCard },
   { href: "/reports", label: "التقارير", icon: BarChart3 },
   { href: "/coupons", label: "الكوبونات", icon: Ticket },
