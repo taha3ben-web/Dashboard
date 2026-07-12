@@ -22,6 +22,7 @@ import {
   BarChart3,
   BookOpen,
   Boxes,
+  CreditCard,
 } from "lucide-react";
 
 const LINKS = [
@@ -32,6 +33,7 @@ const LINKS = [
   { href: "/live-map", label: "الخريطة الحية", icon: Map },
   { href: "/earnings", label: "الأرباح", icon: Wallet },
   { href: "/wallets", label: "الحسابات المالية", icon: BookOpen },
+  { href: "/payments", label: "المدفوعات", icon: CreditCard },
   { href: "/reports", label: "التقارير", icon: BarChart3 },
   { href: "/coupons", label: "الكوبونات", icon: Ticket },
   { href: "/notifications", label: "الإشعارات", icon: Bell },
