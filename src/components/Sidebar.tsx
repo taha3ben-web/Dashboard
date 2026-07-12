@@ -34,6 +34,7 @@ const LINKS = [
   { href: "/earnings", label: "الأرباح", icon: Wallet },
   { href: "/wallets", label: "الحسابات المالية", icon: BookOpen },
   { href: "/financial-dashboard", label: "لوحة المالية", icon: Wallet },
+  { href: "/financial-control", label: "المطابقة والتسوية", icon: ShieldAlert },
   { href: "/payments", label: "المدفوعات", icon: CreditCard },
   { href: "/reports", label: "التقارير", icon: BarChart3 },
   { href: "/coupons", label: "الكوبونات", icon: Ticket },

@@ -255,6 +255,7 @@ export default function FinancialDashboardPage() {
           </Panel>
 
           <Panel title="روابط تشغيل سريعة">
+            <QuickLink href="/financial-control" label="المطابقة والتسوية" />
             <QuickLink href="/payments" label="إدارة المدفوعات" />
             <QuickLink href="/earnings" label="تشغيل السحوبات والأرباح" />
             <QuickLink href="/financial-transactions" label="قيود الدفتر المالي" />
