@@ -26,8 +26,7 @@ export function getApiErrorMessage(
 ): string {
   if (axios.isAxiosError(error)) {
     const payload = error.response?.data as
-      | { error?: unknown; message?: unknown }
-      | undefined;
+      { error?: unknown; message?: unknown } | undefined;
     const candidate = payload?.error ?? payload?.message;
 
     if (Array.isArray(candidate)) {
@@ -52,7 +51,11 @@ export function getApiStatus(error: unknown): number | undefined {
   return axios.isAxiosError(error) ? error.response?.status : undefined;
 }
 
-export const api: AxiosInstance = axios.create({ baseURL: API_URL });
+export const api: AxiosInstance = axios.create({
+  baseURL: API_URL,
+  timeout: 20_000,
+  headers: { Accept: "application/json" },
+});
 
 // إرفاق التوكن تلقائيًا
 api.interceptors.request.use((config) => {
@@ -81,9 +84,18 @@ api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
     const original = error.config as
-      | (NonNullable<AxiosError["config"]> & { _retry?: boolean })
-      | undefined;
-    if (error.response?.status === 401 && original && !original._retry) {
+      (NonNullable<AxiosError["config"]> & { _retry?: boolean }) | undefined;
+    const requestUrl = original?.url ?? "";
+    const isAuthRequest =
+      requestUrl.includes("/auth/login") ||
+      requestUrl.includes("/auth/refresh");
+
+    if (
+      error.response?.status === 401 &&
+      original &&
+      !original._retry &&
+      !isAuthRequest
+    ) {
       original._retry = true;
       try {
         // أول طلب يبدأ التجديد؛ الباقي ينتظر نفس الوعد.

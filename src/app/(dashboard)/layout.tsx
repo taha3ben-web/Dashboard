@@ -1,6 +1,6 @@
 "use client";
 
-import { Sidebar } from "@/components/Sidebar";
+import { DashboardShell } from "@/components/DashboardShell";
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function DashboardLayout({
@@ -12,17 +12,15 @@ export default function DashboardLayout({
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-gray-400">
-        جارٍ التحميل...
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-gray-950">
+        <div className="flex flex-col items-center gap-4 text-slate-500">
+          <div className="h-11 w-11 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600 dark:border-indigo-950 dark:border-t-indigo-400" />
+          <div className="text-sm font-semibold">جارٍ تجهيز مركز التحكم...</div>
+        </div>
       </div>
     );
   }
   if (!authed) return null;
 
-  return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-x-hidden">{children}</main>
-    </div>
-  );
+  return <DashboardShell>{children}</DashboardShell>;
 }

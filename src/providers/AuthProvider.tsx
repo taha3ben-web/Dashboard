@@ -35,6 +35,7 @@ interface AuthState {
   permissions: string[];
   login: (phone: string, password: string) => Promise<void>;
   logout: () => void;
+  refreshProfile: () => Promise<StaffMe | null>;
   can: (...required: string[]) => boolean;
 }
 
@@ -67,6 +68,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifiedTokenRef = useRef<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
+
+  function resetAuthState(redirectToLogin = true) {
+    clearTokens();
+    clearProfile();
+    closeSocket();
+    verifiedTokenRef.current = null;
+    setProfile(null);
+    setAuthed(false);
+    setReady(true);
+    if (redirectToLogin) {
+      router.replace("/login");
+    }
+  }
+
+  function applyProfile(nextProfile: StaffMe) {
+    cacheProfile(nextProfile);
+    setProfile(nextProfile);
+    setAuthed(true);
+    setReady(true);
+
+    if (pathname === "/login") {
+      router.replace(firstAccessiblePath(nextProfile.permissions));
+    } else if (!canAccessPath(pathname, nextProfile.permissions)) {
+      router.replace(firstAccessiblePath(nextProfile.permissions));
+    }
+  }
+
+  async function refreshProfile(): Promise<StaffMe | null> {
+    try {
+      const response = await api.post<StaffMe>("/auth/me");
+      const nextProfile = response.data;
+
+      if (nextProfile.role !== "STAFF") {
+        resetAuthState();
+        return null;
+      }
+
+      applyProfile(nextProfile);
+      return nextProfile;
+    } catch (error) {
+      if (getApiStatus(error) === 401) {
+        resetAuthState();
+        return null;
+      }
+      throw error;
+    }
+  }
 
   useEffect(() => {
     const token = getToken();
@@ -103,36 +151,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const nextProfile = response.data;
 
         if (nextProfile.role !== "STAFF") {
-          clearTokens();
-          clearProfile();
-          verifiedTokenRef.current = null;
-          setProfile(null);
-          setAuthed(false);
-          router.replace("/login");
+          resetAuthState();
           return;
         }
 
-        cacheProfile(nextProfile);
-        setProfile(nextProfile);
-        setAuthed(true);
-        setReady(true);
-
-        if (pathname === "/login") {
-          router.replace(firstAccessiblePath(nextProfile.permissions));
-        } else if (!canAccessPath(pathname, nextProfile.permissions)) {
-          router.replace(firstAccessiblePath(nextProfile.permissions));
-        }
+        applyProfile(nextProfile);
       })
       .catch((error: unknown) => {
         if (!active) return;
 
         if (getApiStatus(error) === 401) {
-          clearTokens();
-          clearProfile();
-          verifiedTokenRef.current = null;
-          setProfile(null);
-          setAuthed(false);
-          router.replace("/login");
+          resetAuthState();
           return;
         }
 
@@ -190,13 +219,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.replace(firstAccessiblePath(nextProfile.permissions));
     } catch (error) {
       throw new Error(
-        getApiErrorMessage(error, "فشل تسجيل الدخول. تحقق من رقم الهاتف وكلمة المرور."),
+        getApiErrorMessage(
+          error,
+          "فشل تسجيل الدخول. تحقق من رقم الهاتف وكلمة المرور.",
+        ),
       );
     }
   }
 
   function logout(): void {
-    void api.post("/auth/logout", {}).catch(() => undefined);
+    const accessToken = getToken();
+    if (accessToken) {
+      void api
+        .post(
+          "/auth/logout",
+          {},
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        )
+        .catch(() => undefined);
+    }
     clearTokens();
     clearProfile();
     closeSocket();
@@ -215,6 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       permissions,
       login,
       logout,
+      refreshProfile,
       can: (...required: string[]) => hasAnyPermission(permissions, required),
     }),
     [authed, ready, profile, permissions],

@@ -1,46 +1,38 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Save, Settings2 } from "lucide-react";
+import { Globe2, Settings2 } from "lucide-react";
 import { Topbar } from "@/components/Topbar";
 import { DataTable, type Column } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api, getApiErrorMessage } from "@/lib/api";
-
-interface Setting {
-  id: string;
-  key: string;
-  value: unknown;
-  group?: string | null;
-  updatedAt: string;
-}
-
-interface City {
-  id: string;
-  name: string;
-  country?: string | null;
-  isActive: boolean;
-  centerLat?: number | null;
-  centerLng?: number | null;
-  _count?: { zones: number; drivers: number; trips: number };
-}
-
-interface Zone {
-  id: string;
-  cityId: string;
-  name: string;
-  polygon?: unknown;
-  city?: { id: string; name: string };
-}
+import { num } from "@/lib/format";
+import { SettingsPanel } from "./SettingsPanel";
+import {
+  SettingsModals,
+  emptyCityForm,
+  emptySettingForm,
+  emptyZoneForm,
+} from "./SettingsModals";
+import type {
+  City,
+  CityForm,
+  DeleteTarget,
+  Setting,
+  SettingForm,
+  Zone,
+  ZoneForm,
+} from "./settings.types";
 
 function toText(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value;
-  return JSON.stringify(value);
+  return JSON.stringify(value, null, 2);
 }
 
 function parseValue(text: string): unknown {
   const trimmed = text.trim();
+  if (!trimmed) return "";
   try {
     return JSON.parse(trimmed);
   } catch {
@@ -48,169 +40,354 @@ function parseValue(text: string): unknown {
   }
 }
 
-function parseJsonObject(text: string): Record<string, unknown> | undefined {
+function parsePolygon(text: string): Record<string, unknown> | undefined {
   const trimmed = text.trim();
   if (!trimmed) return undefined;
-  const parsed = JSON.parse(trimmed);
-  return typeof parsed === "object" && parsed !== null
-    ? (parsed as Record<string, unknown>)
-    : undefined;
+  const parsed: unknown = JSON.parse(trimmed);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Polygon يجب أن يكون JSON object صالحًا");
+  }
+  return parsed as Record<string, unknown>;
 }
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Setting[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [dirtyKeys, setDirtyKeys] = useState<string[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [selectedCityId, setSelectedCityId] = useState("");
-  const [savedKey, setSavedKey] = useState("");
+  const [settingSearch, setSettingSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [zonesLoading, setZonesLoading] = useState(false);
+  const [busyAction, setBusyAction] = useState("");
+  const [settingForm, setSettingForm] =
+    useState<SettingForm>(emptySettingForm());
+  const [cityForm, setCityForm] = useState<CityForm>(emptyCityForm());
+  const [zoneForm, setZoneForm] = useState<ZoneForm>(emptyZoneForm());
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
-  const [cityForm, setCityForm] = useState({
-    name: "",
-    country: "DZ",
-    centerLat: "",
-    centerLng: "",
-    isActive: true,
-  });
-  const [zoneForm, setZoneForm] = useState({
-    cityId: "",
-    name: "",
-    polygon: '{"type":"Polygon","coordinates":[]}',
-  });
-
-  const loadSettings = useCallback(() => {
-    api
-      .get("/settings")
-      .then((response) => {
-        const list: Setting[] = response.data ?? [];
-        setSettings(list);
-        const map: Record<string, string> = {};
-        for (const item of list) map[item.key] = toText(item.value);
-        setDrafts(map);
-      })
-      .catch(() => setSettings([]));
+  const loadSettings = useCallback(async () => {
+    setSettingsLoading(true);
+    try {
+      const response = await api.get("/settings");
+      const list: Setting[] = response.data ?? [];
+      setSettings(list);
+      const map: Record<string, string> = {};
+      for (const item of list)
+        map[item.key] = item.masked ? "" : toText(item.value);
+      setDrafts(map);
+      setDirtyKeys([]);
+      setError("");
+    } catch (loadError) {
+      setSettings([]);
+      setDrafts({});
+      setError(getApiErrorMessage(loadError, "تعذّر تحميل إعدادات النظام"));
+    } finally {
+      setSettingsLoading(false);
+    }
   }, []);
 
-  const loadCities = useCallback(() => {
-    api
-      .get("/cities")
-      .then((response) => {
-        const items: City[] = response.data ?? [];
-        setCities(items);
-        setSelectedCityId((current) => current || items[0]?.id || "");
-        setZoneForm((current) => ({
-          ...current,
-          cityId: current.cityId || items[0]?.id || "",
-        }));
-      })
-      .catch(() => setCities([]));
+  const loadCities = useCallback(async () => {
+    setCitiesLoading(true);
+    try {
+      const response = await api.get("/cities");
+      const items: City[] = response.data ?? [];
+      setCities(items);
+      setSelectedCityId((current) =>
+        items.some((city) => city.id === current)
+          ? current
+          : (items[0]?.id ?? ""),
+      );
+      setError("");
+    } catch (loadError) {
+      setCities([]);
+      setSelectedCityId("");
+      setError(getApiErrorMessage(loadError, "تعذّر تحميل المدن"));
+    } finally {
+      setCitiesLoading(false);
+    }
   }, []);
 
-  const loadZones = useCallback((cityId: string) => {
+  const loadZones = useCallback(async (cityId: string) => {
     if (!cityId) {
       setZones([]);
       return;
     }
-    api
-      .get("/zones", { params: { cityId } })
-      .then((response) => setZones(response.data ?? []))
-      .catch(() => setZones([]));
+    setZonesLoading(true);
+    try {
+      const response = await api.get("/zones", { params: { cityId } });
+      setZones(response.data ?? []);
+      setError("");
+    } catch (loadError) {
+      setZones([]);
+      setError(getApiErrorMessage(loadError, "تعذّر تحميل المناطق"));
+    } finally {
+      setZonesLoading(false);
+    }
   }, []);
 
-  const load = useCallback(() => {
-    setError("");
-    loadSettings();
-    loadCities();
-  }, [loadCities, loadSettings]);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    void Promise.all([loadSettings(), loadCities()]);
+  }, [loadSettings, loadCities]);
 
   useEffect(() => {
     void loadZones(selectedCityId);
   }, [loadZones, selectedCityId]);
 
-  async function saveSetting(key: string) {
+  const groups = useMemo(
+    () =>
+      Array.from(
+        new Set(settings.map((setting) => setting.group || "بدون مجموعة")),
+      ).sort(),
+    [settings],
+  );
+  const filteredSettings = useMemo(() => {
+    const query = settingSearch.trim().toLowerCase();
+    return settings.filter((setting) => {
+      const matchesGroup =
+        !groupFilter || (setting.group || "بدون مجموعة") === groupFilter;
+      const matchesSearch =
+        !query ||
+        setting.key.toLowerCase().includes(query) ||
+        (setting.group ?? "").toLowerCase().includes(query);
+      return matchesGroup && matchesSearch;
+    });
+  }, [settings, settingSearch, groupFilter]);
+  const selectedCityName =
+    cities.find((city) => city.id === selectedCityId)?.name ?? "-";
+
+  const clearFeedback = () => {
+    setError("");
+    setSuccess("");
+  };
+
+  function updateDraft(key: string, value: string) {
+    setDrafts((current) => ({ ...current, [key]: value }));
+    setDirtyKeys((current) =>
+      current.includes(key) ? current : [...current, key],
+    );
+  }
+
+  async function saveInlineSetting(key: string) {
+    const setting = settings.find((item) => item.key === key);
+    if (!setting) return;
+    clearFeedback();
+    setBusyAction(`setting:${key}`);
     try {
       await api.put(`/settings/${encodeURIComponent(key)}`, {
-        value: parseValue(drafts[key] ?? ""),
+        value:
+          setting.isSensitive && !(drafts[key] ?? "").trim()
+            ? undefined
+            : parseValue(drafts[key] ?? ""),
       });
-      setSavedKey(key);
-      setTimeout(() => setSavedKey(""), 1500);
-      loadSettings();
+      setSuccess(`تم حفظ ${key} ورفع نسخة الإعدادات.`);
+      await loadSettings();
     } catch (saveError) {
       setError(getApiErrorMessage(saveError, "تعذّر حفظ الإعداد"));
+    } finally {
+      setBusyAction("");
     }
   }
 
-  async function createCity() {
+  async function saveAllDirty() {
+    const items = settings
+      .filter((setting) => dirtyKeys.includes(setting.key))
+      .filter(
+        (setting) => !setting.isSensitive || (drafts[setting.key] ?? "").trim(),
+      )
+      .map((setting) => ({
+        key: setting.key,
+        group: setting.group || undefined,
+        value: parseValue(drafts[setting.key] ?? ""),
+        isPublic: setting.isPublic,
+        isSensitive: setting.isSensitive,
+      }));
+    if (items.length === 0) return;
+    clearFeedback();
+    setBusyAction("bulk-settings");
     try {
-      await api.post("/cities", {
-        name: cityForm.name,
-        country: cityForm.country || undefined,
-        isActive: cityForm.isActive,
-        centerLat: cityForm.centerLat ? Number(cityForm.centerLat) : undefined,
-        centerLng: cityForm.centerLng ? Number(cityForm.centerLng) : undefined,
-      });
-      setCityForm({
-        name: "",
-        country: "DZ",
-        centerLat: "",
-        centerLng: "",
-        isActive: true,
-      });
-      loadCities();
-    } catch (createError) {
-      setError(getApiErrorMessage(createError, "تعذّر إنشاء المدينة"));
+      await api.post("/settings/bulk", { items });
+      setSuccess(`تم حفظ ${items.length} إعدادات ورفع نسخة التكوين.`);
+      await loadSettings();
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "تعذّر حفظ الإعدادات"));
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  function openSettingEditor(setting?: Setting) {
+    if (!setting) {
+      setSettingForm({ ...emptySettingForm(), open: true });
+      return;
+    }
+    setSettingForm({
+      open: true,
+      originalKey: setting.key,
+      key: setting.key,
+      group: setting.group ?? "",
+      value: setting.masked ? "" : toText(setting.value),
+      isPublic: setting.isPublic,
+      isSensitive: setting.isSensitive,
+      hasStoredSecret: Boolean(setting.masked && setting.hasValue),
+    });
+  }
+
+  async function saveSettingForm() {
+    clearFeedback();
+    setBusyAction("setting");
+    try {
+      const payload = {
+        value:
+          settingForm.isSensitive &&
+          settingForm.hasStoredSecret &&
+          !settingForm.value.trim()
+            ? undefined
+            : parseValue(settingForm.value),
+        group: settingForm.group || undefined,
+        isPublic: settingForm.isPublic,
+        isSensitive: settingForm.isSensitive,
+      };
+      if (settingForm.originalKey) {
+        await api.put(
+          `/settings/${encodeURIComponent(settingForm.originalKey)}`,
+          payload,
+        );
+      } else {
+        await api.post("/settings", { ...payload, key: settingForm.key });
+      }
+      setSettingForm(emptySettingForm());
+      setSuccess("تم حفظ الإعداد وتحديث نسخة Public Config.");
+      await loadSettings();
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "تعذّر حفظ الإعداد"));
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  function openCityEditor(city?: City) {
+    setCityForm(
+      city
+        ? {
+            open: true,
+            id: city.id,
+            name: city.name,
+            country: city.country ?? "",
+            centerLat: city.centerLat?.toString() ?? "",
+            centerLng: city.centerLng?.toString() ?? "",
+            isActive: city.isActive,
+          }
+        : { ...emptyCityForm(), open: true },
+    );
+  }
+
+  async function saveCity() {
+    const payload = {
+      name: cityForm.name,
+      country: cityForm.country || undefined,
+      isActive: cityForm.isActive,
+      centerLat: cityForm.centerLat ? Number(cityForm.centerLat) : undefined,
+      centerLng: cityForm.centerLng ? Number(cityForm.centerLng) : undefined,
+    };
+    clearFeedback();
+    setBusyAction("city");
+    try {
+      if (cityForm.id) await api.patch(`/cities/${cityForm.id}`, payload);
+      else await api.post("/cities", payload);
+      setCityForm(emptyCityForm());
+      setSuccess("تم حفظ المدينة وتحديث التكوين المتاح للتطبيقات.");
+      await loadCities();
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "تعذّر حفظ المدينة"));
+    } finally {
+      setBusyAction("");
     }
   }
 
   async function toggleCity(city: City) {
+    clearFeedback();
+    setBusyAction(`city:${city.id}`);
     try {
       await api.patch(`/cities/${city.id}`, { isActive: !city.isActive });
-      loadCities();
+      setSuccess(city.isActive ? "تم تعطيل المدينة." : "تم تفعيل المدينة.");
+      await loadCities();
     } catch (actionError) {
       setError(getApiErrorMessage(actionError, "تعذّر تحديث المدينة"));
+    } finally {
+      setBusyAction("");
     }
   }
 
-  async function deleteCity(cityId: string) {
-    if (!window.confirm("حذف المدينة؟")) return;
+  function openZoneEditor(zone?: Zone) {
+    setZoneForm(
+      zone
+        ? {
+            open: true,
+            id: zone.id,
+            cityId: zone.cityId,
+            name: zone.name,
+            polygon: toText(zone.polygon),
+          }
+        : { ...emptyZoneForm(selectedCityId), open: true },
+    );
+  }
+
+  async function saveZone() {
+    let polygon: Record<string, unknown> | undefined;
     try {
-      await api.delete(`/cities/${cityId}`);
-      loadCities();
-    } catch (actionError) {
-      setError(getApiErrorMessage(actionError, "تعذّر حذف المدينة"));
+      polygon = parsePolygon(zoneForm.polygon);
+    } catch (parseError) {
+      setError(
+        parseError instanceof Error ? parseError.message : "Polygon غير صالح",
+      );
+      return;
+    }
+    clearFeedback();
+    setBusyAction("zone");
+    try {
+      const payload = { cityId: zoneForm.cityId, name: zoneForm.name, polygon };
+      if (zoneForm.id) await api.patch(`/zones/${zoneForm.id}`, payload);
+      else await api.post("/zones", payload);
+      const targetCityId = zoneForm.cityId;
+      setZoneForm(emptyZoneForm());
+      setSelectedCityId(targetCityId);
+      setSuccess("تم حفظ المنطقة وتحديث التكوين المتاح للتطبيقات.");
+      await loadZones(targetCityId);
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "تعذّر حفظ المنطقة"));
+    } finally {
+      setBusyAction("");
     }
   }
 
-  async function createZone() {
+  async function deleteSelected() {
+    if (!deleteTarget) return;
+    clearFeedback();
+    setBusyAction("delete");
     try {
-      await api.post("/zones", {
-        cityId: zoneForm.cityId,
-        name: zoneForm.name,
-        polygon: parseJsonObject(zoneForm.polygon),
-      });
-      setZoneForm((current) => ({
-        ...current,
-        name: "",
-        polygon: '{"type":"Polygon","coordinates":[]}',
-      }));
-      loadZones(zoneForm.cityId);
-    } catch (createError) {
-      setError(getApiErrorMessage(createError, "تعذّر إنشاء المنطقة"));
-    }
-  }
-
-  async function deleteZone(zoneId: string) {
-    if (!window.confirm("حذف المنطقة؟")) return;
-    try {
-      await api.delete(`/zones/${zoneId}`);
-      loadZones(selectedCityId);
-    } catch (actionError) {
-      setError(getApiErrorMessage(actionError, "تعذّر حذف المنطقة"));
+      if (deleteTarget.type === "setting") {
+        await api.delete(`/settings/${encodeURIComponent(deleteTarget.id)}`);
+        await loadSettings();
+      } else if (deleteTarget.type === "city") {
+        await api.delete(`/cities/${deleteTarget.id}`);
+        await loadCities();
+      } else {
+        await api.delete(`/zones/${deleteTarget.id}`);
+        await loadZones(selectedCityId);
+      }
+      setDeleteTarget(null);
+      setSuccess("تم الحذف وتحديث نسخة التكوين.");
+    } catch (deleteError) {
+      setError(getApiErrorMessage(deleteError, "تعذّر الحذف"));
+      throw deleteError;
+    } finally {
+      setBusyAction("");
     }
   }
 
@@ -226,27 +403,42 @@ export default function SettingsPage() {
     {
       key: "isActive",
       header: "الحالة",
-      render: (city) => <StatusBadge status={city.isActive ? "ACTIVE" : "OFFLINE"} />,
+      render: (city) => (
+        <StatusBadge status={city.isActive ? "ACTIVE" : "OFFLINE"} />
+      ),
     },
     {
       key: "actions",
       header: "إجراءات",
       render: (city) => (
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <button
             onClick={() => setSelectedCityId(city.id)}
             className="rounded bg-brand/10 px-2 py-1 text-xs text-brand"
           >
-            اختيار
+            المناطق
           </button>
           <button
+            onClick={() => openCityEditor(city)}
+            className="rounded bg-blue-500/10 px-2 py-1 text-xs text-blue-600"
+          >
+            تعديل
+          </button>
+          <button
+            disabled={busyAction === `city:${city.id}`}
             onClick={() => void toggleCity(city)}
             className="rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-600"
           >
             {city.isActive ? "تعطيل" : "تفعيل"}
           </button>
           <button
-            onClick={() => void deleteCity(city.id)}
+            onClick={() =>
+              setDeleteTarget({
+                type: "city",
+                id: city.id,
+                label: `مدينة ${city.name}`,
+              })
+            }
             className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-600"
           >
             حذف
@@ -262,172 +454,161 @@ export default function SettingsPage() {
       key: "city",
       header: "المدينة",
       render: (zone) =>
-        cities.find((city) => city.id === zone.cityId)?.name ?? zone.city?.name ?? "-",
+        zone.city?.name ??
+        cities.find((city) => city.id === zone.cityId)?.name ??
+        "-",
     },
     {
       key: "polygon",
       header: "Polygon",
       render: (zone) =>
-        zone.polygon ? `${JSON.stringify(zone.polygon).slice(0, 60)}...` : "-",
+        zone.polygon ? `${JSON.stringify(zone.polygon).slice(0, 70)}...` : "-",
     },
     {
       key: "actions",
       header: "إجراءات",
       render: (zone) => (
-        <button
-          onClick={() => void deleteZone(zone.id)}
-          className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-600"
-        >
-          حذف
-        </button>
+        <div className="flex gap-1">
+          <button
+            onClick={() => openZoneEditor(zone)}
+            className="rounded bg-blue-500/10 px-2 py-1 text-xs text-blue-600"
+          >
+            تعديل
+          </button>
+          <button
+            onClick={() =>
+              setDeleteTarget({
+                type: "zone",
+                id: zone.id,
+                label: `منطقة ${zone.name}`,
+              })
+            }
+            className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-600"
+          >
+            حذف
+          </button>
+        </div>
       ),
     },
   ];
 
-  const selectedCityName = useMemo(
-    () => cities.find((city) => city.id === selectedCityId)?.name ?? "-",
-    [cities, selectedCityId],
-  );
-
   return (
     <>
       <Topbar title="الإعدادات والمدن والمناطق" />
-      <div className="space-y-8 p-6">
+      <div className="space-y-6 p-6">
+        <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-900/40 dark:bg-cyan-950/20">
+          <div className="flex items-center gap-2 text-cyan-700 dark:text-cyan-300">
+            <Globe2 size={18} />
+            <span className="font-medium">
+              الخادم هو مصدر الحقيقة، والتطبيقات تقرأ الإعدادات العامة من GET
+              /public/config
+            </span>
+          </div>
+          <div className="mt-1 text-sm text-cyan-700/80 dark:text-cyan-300/80">
+            الإعدادات: {num(settings.length)} · المدن: {num(cities.length)} ·
+            مناطق المدينة المختارة: {num(zones.length)}
+          </div>
+        </div>
+
+        {success ? (
+          <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-900/40 dark:bg-green-950/20 dark:text-green-300">
+            {success}
+          </div>
+        ) : null}
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">
             {error}
           </div>
         ) : null}
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-bold">إعدادات النظام</h2>
-          {settings.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              لا توجد إعدادات بعد. تُضاف من الخادم أو عبر التهيئة الأولية.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {settings.map((setting) => (
-                <div
-                  key={setting.id}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900"
-                >
-                  <div className="min-w-40">
-                    <div className="text-sm font-medium">{setting.key}</div>
-                    {setting.group ? (
-                      <div className="text-xs text-gray-400">{setting.group}</div>
-                    ) : null}
-                  </div>
-                  <input
-                    value={drafts[setting.key] ?? ""}
-                    onChange={(event) =>
-                      setDrafts({ ...drafts, [setting.key]: event.target.value })
-                    }
-                    className="flex-1 rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700"
-                  />
-                  <button
-                    onClick={() => void saveSetting(setting.key)}
-                    className="flex items-center gap-1 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white"
-                  >
-                    <Save size={14} />
-                    {savedKey === setting.key ? "تم ✓" : "حفظ"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+        <SettingsPanel
+          settings={filteredSettings}
+          drafts={drafts}
+          dirtyKeys={dirtyKeys}
+          search={settingSearch}
+          setSearch={setSettingSearch}
+          groupFilter={groupFilter}
+          setGroupFilter={setGroupFilter}
+          groups={groups}
+          loading={settingsLoading}
+          busyAction={busyAction}
+          updateDraft={updateDraft}
+          openEditor={openSettingEditor}
+          saveOne={saveInlineSetting}
+          saveAll={saveAllDirty}
+          refresh={loadSettings}
+          remove={(setting) =>
+            setDeleteTarget({
+              type: "setting",
+              id: setting.key,
+              label: `الإعداد ${setting.key}`,
+            })
+          }
+        />
 
         <section className="grid gap-6 xl:grid-cols-2">
           <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center gap-2">
-              <Settings2 size={18} className="text-brand" />
-              <h2 className="text-lg font-bold">المدن</h2>
-            </div>
-            <div className="grid gap-3 md:grid-cols-5">
-              <input
-                value={cityForm.name}
-                onChange={(event) => setCityForm({ ...cityForm, name: event.target.value })}
-                placeholder="اسم المدينة"
-                className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-              />
-              <input
-                value={cityForm.country}
-                onChange={(event) => setCityForm({ ...cityForm, country: event.target.value })}
-                placeholder="الدولة"
-                className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-              />
-              <input
-                value={cityForm.centerLat}
-                onChange={(event) => setCityForm({ ...cityForm, centerLat: event.target.value })}
-                placeholder="centerLat"
-                className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-              />
-              <input
-                value={cityForm.centerLng}
-                onChange={(event) => setCityForm({ ...cityForm, centerLng: event.target.value })}
-                placeholder="centerLng"
-                className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-              />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings2 size={18} className="text-brand" />
+                <h2 className="text-lg font-bold">المدن</h2>
+              </div>
               <button
-                onClick={() => void createCity()}
-                disabled={!cityForm.name}
-                className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                onClick={() => openCityEditor()}
+                className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
               >
-                إنشاء مدينة
+                مدينة جديدة
               </button>
             </div>
-            <DataTable columns={cityColumns} rows={cities} empty="لا توجد مدن" />
+            <DataTable
+              columns={cityColumns}
+              rows={cities}
+              loading={citiesLoading}
+              empty="لا توجد مدن"
+            />
           </div>
-
           <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-bold">المناطق</h2>
-              <div className="text-sm text-gray-500">
-                المدينة المختارة: {selectedCityName}
+              <div>
+                <h2 className="text-lg font-bold">المناطق</h2>
+                <div className="text-sm text-gray-500">
+                  المدينة: {selectedCityName}
+                </div>
               </div>
-            </div>
-            <div className="grid gap-3">
-              <select
-                value={zoneForm.cityId}
-                onChange={(event) => {
-                  setZoneForm({ ...zoneForm, cityId: event.target.value });
-                  setSelectedCityId(event.target.value);
-                }}
-                className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-              >
-                <option value="">اختر المدينة</option>
-                {cities.map((city) => (
-                  <option key={city.id} value={city.id}>
-                    {city.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={zoneForm.name}
-                onChange={(event) => setZoneForm({ ...zoneForm, name: event.target.value })}
-                placeholder="اسم المنطقة"
-                className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-              />
-              <textarea
-                value={zoneForm.polygon}
-                onChange={(event) => setZoneForm({ ...zoneForm, polygon: event.target.value })}
-                rows={5}
-                placeholder='{"type":"Polygon","coordinates":[...]}'
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-              />
               <button
-                onClick={() => void createZone()}
-                disabled={!zoneForm.cityId || !zoneForm.name}
-                className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                onClick={() => openZoneEditor()}
+                disabled={!selectedCityId}
+                className="rounded-lg bg-brand px-3 py-2 text-sm text-white disabled:opacity-50"
               >
-                إنشاء منطقة
+                منطقة جديدة
               </button>
             </div>
-            <DataTable columns={zoneColumns} rows={zones} empty="لا توجد مناطق لهذه المدينة" />
+            <DataTable
+              columns={zoneColumns}
+              rows={zones}
+              loading={zonesLoading}
+              empty="لا توجد مناطق لهذه المدينة"
+            />
           </div>
         </section>
       </div>
+
+      <SettingsModals
+        settingForm={settingForm}
+        setSettingForm={setSettingForm}
+        saveSetting={saveSettingForm}
+        cityForm={cityForm}
+        setCityForm={setCityForm}
+        saveCity={saveCity}
+        zoneForm={zoneForm}
+        setZoneForm={setZoneForm}
+        cities={cities}
+        saveZone={saveZone}
+        deleteTarget={deleteTarget}
+        setDeleteTarget={setDeleteTarget}
+        deleteSelected={deleteSelected}
+        busyAction={busyAction}
+      />
     </>
   );
 }
