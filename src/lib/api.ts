@@ -20,6 +20,38 @@ export function clearTokens(): void {
   window.localStorage.removeItem(REFRESH_KEY);
 }
 
+export function getApiErrorMessage(
+  error: unknown,
+  fallback = "حدث خطأ غير متوقع",
+): string {
+  if (axios.isAxiosError(error)) {
+    const payload = error.response?.data as
+      | { error?: unknown; message?: unknown }
+      | undefined;
+    const candidate = payload?.error ?? payload?.message;
+
+    if (Array.isArray(candidate)) {
+      return candidate.map((item) => String(item)).join("، ");
+    }
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate;
+    }
+    if (typeof error.message === "string" && error.message.trim()) {
+      return error.message;
+    }
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+export function getApiStatus(error: unknown): number | undefined {
+  return axios.isAxiosError(error) ? error.response?.status : undefined;
+}
+
 export const api: AxiosInstance = axios.create({ baseURL: API_URL });
 
 // إرفاق التوكن تلقائيًا

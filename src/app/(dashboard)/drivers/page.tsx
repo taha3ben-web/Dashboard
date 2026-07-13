@@ -7,6 +7,7 @@ import { DataTable, Column } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
 import { num } from "@/lib/format";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface Driver {
   id: string;
@@ -20,6 +21,7 @@ interface Driver {
 const STATUSES = ["", "PENDING", "APPROVED", "SUSPENDED", "REJECTED", "BANNED"];
 
 export default function DriversPage() {
+  const { can } = useAuth();
   const [rows, setRows] = useState<Driver[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -44,9 +46,12 @@ export default function DriversPage() {
   }, [load]);
 
   async function act(id: string, action: string) {
+    if (!can("drivers.manage")) return;
     await api.patch(`/drivers/${id}/${action}`);
     load();
   }
+
+  const canManageDrivers = can("drivers.manage");
 
   const columns: Column<Driver>[] = [
     { key: "name", header: "الاسم", render: (d) => d.user?.name ?? "-" },
@@ -70,30 +75,34 @@ export default function DriversPage() {
           >
             تفاصيل
           </Link>
-          <button
-            onClick={() => act(d.id, "approve")}
-            className="rounded bg-green-500/10 px-2 py-1 text-xs text-green-500"
-          >
-            قبول
-          </button>
-          <button
-            onClick={() => act(d.id, "reject")}
-            className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-500"
-          >
-            رفض
-          </button>
-          <button
-            onClick={() => act(d.id, "suspend")}
-            className="rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-500"
-          >
-            تعليق
-          </button>
-          <button
-            onClick={() => act(d.id, "ban")}
-            className="rounded bg-gray-500/10 px-2 py-1 text-xs text-gray-500"
-          >
-            حظر
-          </button>
+          {canManageDrivers ? (
+            <>
+              <button
+                onClick={() => act(d.id, "approve")}
+                className="rounded bg-green-500/10 px-2 py-1 text-xs text-green-500"
+              >
+                قبول
+              </button>
+              <button
+                onClick={() => act(d.id, "reject")}
+                className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-500"
+              >
+                رفض
+              </button>
+              <button
+                onClick={() => act(d.id, "suspend")}
+                className="rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-500"
+              >
+                تعليق
+              </button>
+              <button
+                onClick={() => act(d.id, "ban")}
+                className="rounded bg-gray-500/10 px-2 py-1 text-xs text-gray-500"
+              >
+                حظر
+              </button>
+            </>
+          ) : null}
         </div>
       ),
     },
@@ -105,6 +114,12 @@ export default function DriversPage() {
     <>
       <Topbar title="إدارة السائقين" />
       <div className="space-y-4 p-6">
+        {!canManageDrivers ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            هذا الدور يملك صلاحية الاطلاع على بيانات السائقين فقط. إجراءات القبول والرفض والتعليق والحظر مخفية حسب الدور.
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           <input
             value={search}

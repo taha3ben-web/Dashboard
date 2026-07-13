@@ -6,6 +6,7 @@ import { DataTable, Column } from "@/components/DataTable";
 import { api } from "@/lib/api";
 import { num, dateTime, money } from "@/lib/format";
 import { Trash2, Plus } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface Coupon {
   id: string;
@@ -29,12 +30,14 @@ const EMPTY = {
 };
 
 export default function CouponsPage() {
+  const { can } = useAuth();
   const [rows, setRows] = useState<Coupon[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const canManageCoupons = can("coupons.manage");
 
   const load = useCallback(() => {
     api
@@ -51,6 +54,7 @@ export default function CouponsPage() {
   }, [load]);
 
   async function create() {
+    if (!canManageCoupons) return;
     setError("");
     if (!form.code.trim() || !form.value) {
       setError("الرمز والقيمة مطلوبان");
@@ -77,11 +81,13 @@ export default function CouponsPage() {
   }
 
   async function toggle(c: Coupon) {
+    if (!canManageCoupons) return;
     await api.patch(`/coupons/${c.id}`, { isActive: !c.isActive });
     load();
   }
 
   async function remove(id: string) {
+    if (!canManageCoupons) return;
     await api.delete(`/coupons/${id}`);
     load();
   }
@@ -110,10 +116,11 @@ export default function CouponsPage() {
       render: (c) => (
         <button
           onClick={() => toggle(c)}
+          disabled={!canManageCoupons}
           className={
             c.isActive
-              ? "rounded bg-green-500/10 px-2 py-1 text-xs text-green-500"
-              : "rounded bg-gray-500/10 px-2 py-1 text-xs text-gray-500"
+              ? "rounded bg-green-500/10 px-2 py-1 text-xs text-green-500 disabled:cursor-not-allowed disabled:opacity-60"
+              : "rounded bg-gray-500/10 px-2 py-1 text-xs text-gray-500 disabled:cursor-not-allowed disabled:opacity-60"
           }
         >
           {c.isActive ? "مفعّلة" : "موقوفة"}
@@ -129,12 +136,16 @@ export default function CouponsPage() {
       key: "actions",
       header: "حذف",
       render: (c) => (
-        <button
-          onClick={() => remove(c.id)}
-          className="rounded bg-red-500/10 p-1.5 text-red-500"
-        >
-          <Trash2 size={14} />
-        </button>
+        canManageCoupons ? (
+          <button
+            onClick={() => remove(c.id)}
+            className="rounded bg-red-500/10 p-1.5 text-red-500"
+          >
+            <Trash2 size={14} />
+          </button>
+        ) : (
+          <span className="text-xs text-gray-400">عرض فقط</span>
+        )
       ),
     },
   ];
@@ -145,62 +156,70 @@ export default function CouponsPage() {
     <>
       <Topbar title="قسائم الخصم" />
       <div className="space-y-6 p-6">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <h2 className="mb-3 text-sm font-bold">إنشاء قسيمة جديدة</h2>
-          <div className="flex flex-wrap items-end gap-3">
-            <input
-              value={form.code}
-              onChange={(e) => setForm({ ...form, code: e.target.value })}
-              placeholder="الرمز (مثل NOVA10)"
-              className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700"
-            />
-            <select
-              value={form.type}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  type: e.target.value as "PERCENT" | "FIXED",
-                })
-              }
-              className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700 dark:bg-gray-900"
-            >
-              <option value="PERCENT">نسبة %</option>
-              <option value="FIXED">مبلغ ثابت</option>
-            </select>
-            <input
-              value={form.value}
-              onChange={(e) => setForm({ ...form, value: e.target.value })}
-              type="number"
-              placeholder="القيمة"
-              className="w-28 rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700"
-            />
-            <input
-              value={form.maxUses}
-              onChange={(e) => setForm({ ...form, maxUses: e.target.value })}
-              type="number"
-              placeholder="أقصى استخدام (اختياري)"
-              className="w-44 rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700"
-            />
-            <label className="flex items-center gap-2 text-sm text-gray-500">
-              <input
-                type="checkbox"
-                checked={form.firstRideOnly}
-                onChange={(e) =>
-                  setForm({ ...form, firstRideOnly: e.target.checked })
-                }
-              />
-              أول رحلة فقط
-            </label>
-            <button
-              onClick={create}
-              disabled={saving}
-              className="flex items-center gap-1 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              <Plus size={16} /> إضافة
-            </button>
+        {!canManageCoupons ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            هذه الصفحة متاحة لك للقراءة فقط. إنشاء القسائم أو تعديل حالتها أو حذفها متاح فقط لصلاحية إدارة الكوبونات.
           </div>
-          {error ? <p className="mt-2 text-xs text-red-500">{error}</p> : null}
-        </div>
+        ) : null}
+
+        {canManageCoupons ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <h2 className="mb-3 text-sm font-bold">إنشاء قسيمة جديدة</h2>
+            <div className="flex flex-wrap items-end gap-3">
+              <input
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                placeholder="الرمز (مثل NOVA10)"
+                className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700"
+              />
+              <select
+                value={form.type}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    type: e.target.value as "PERCENT" | "FIXED",
+                  })
+                }
+                className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700 dark:bg-gray-900"
+              >
+                <option value="PERCENT">نسبة %</option>
+                <option value="FIXED">مبلغ ثابت</option>
+              </select>
+              <input
+                value={form.value}
+                onChange={(e) => setForm({ ...form, value: e.target.value })}
+                type="number"
+                placeholder="القيمة"
+                className="w-28 rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700"
+              />
+              <input
+                value={form.maxUses}
+                onChange={(e) => setForm({ ...form, maxUses: e.target.value })}
+                type="number"
+                placeholder="أقصى استخدام (اختياري)"
+                className="w-44 rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700"
+              />
+              <label className="flex items-center gap-2 text-sm text-gray-500">
+                <input
+                  type="checkbox"
+                  checked={form.firstRideOnly}
+                  onChange={(e) =>
+                    setForm({ ...form, firstRideOnly: e.target.checked })
+                  }
+                />
+                أول رحلة فقط
+              </label>
+              <button
+                onClick={create}
+                disabled={saving}
+                className="flex items-center gap-1 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                <Plus size={16} /> إضافة
+              </button>
+            </div>
+            {error ? <p className="mt-2 text-xs text-red-500">{error}</p> : null}
+          </div>
+        ) : null}
 
         <DataTable columns={columns} rows={rows} />
 

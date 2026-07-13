@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
 import { money, num, dateTime } from "@/lib/format";
 import { ArrowRight, Star, Car, Wallet as WalletIcon, FileText, MapPin } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface WalletTx {
   id: string;
@@ -97,6 +98,7 @@ const RIDE_CLASS_LABELS: Record<string, string> = {
 };
 
 export default function DriverDetailPage() {
+  const { can } = useAuth();
   const params = useParams();
   const router = useRouter();
   const id = String(params?.id ?? "");
@@ -105,6 +107,8 @@ export default function DriverDetailPage() {
   // الرسالة التي يتحكم بها الطاقم وتظهر للسائق في التطبيق مع قرار الحالة.
   const [statusMsg, setStatusMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  const canManageDrivers = can("drivers.manage");
+  const canReviewDocs = can("drivers.documents", "drivers.manage");
 
   const load = useCallback(() => {
     if (!id) return;
@@ -124,6 +128,7 @@ export default function DriverDetailPage() {
   }, [load]);
 
   async function accountAction(action: string) {
+    if (!canManageDrivers) return;
     setSaving(true);
     try {
       // نرسل الرسالة مع القرار لتظهر للسائق في شاشة الحالة داخل التطبيق.
@@ -137,6 +142,7 @@ export default function DriverDetailPage() {
   }
 
   async function reviewDoc(docId: string, status: "APPROVED" | "REJECTED") {
+    if (!canReviewDocs) return;
     let note: string | undefined;
     if (status === "REJECTED") {
       note = window.prompt("سبب رفض الوثيقة (يظهر للسائق):") ?? undefined;
@@ -168,6 +174,12 @@ export default function DriverDetailPage() {
     <>
       <Topbar title="تفاصيل السائق" />
       <div className="space-y-6 p-6">
+        {!canManageDrivers ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            هذا العرض للقراءة فقط بالنسبة لإدارة الحساب. تحتاج إلى صلاحية إدارة السائقين أو الوثائق لتنفيذ الأوامر الحساسة.
+          </div>
+        ) : null}
+
         <button
           onClick={() => router.push("/drivers")}
           className="flex items-center gap-1 text-sm text-gray-500 hover:text-brand"
@@ -225,38 +237,41 @@ export default function DriverDetailPage() {
               onChange={(e) => setStatusMsg(e.target.value)}
               rows={2}
               placeholder="مثال: تم قبول طلبك، مرحبًا بك في NOVA. — أو: الصور غير واضحة، يرجى إعادة رفع الوثائق."
+              disabled={!canManageDrivers}
               className="w-full rounded-lg border border-gray-200 bg-white p-2 text-sm outline-none focus:border-brand dark:border-gray-700 dark:bg-gray-800"
             />
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                disabled={saving}
-                onClick={() => accountAction("approve")}
-                className="rounded-lg bg-green-500/10 px-3 py-1.5 text-sm text-green-500 disabled:opacity-50"
-              >
-                قبول الطلب
-              </button>
-              <button
-                disabled={saving}
-                onClick={() => accountAction("reject")}
-                className="rounded-lg bg-red-500/10 px-3 py-1.5 text-sm text-red-500 disabled:opacity-50"
-              >
-                رفض الطلب
-              </button>
-              <button
-                disabled={saving}
-                onClick={() => accountAction("suspend")}
-                className="rounded-lg bg-amber-500/10 px-3 py-1.5 text-sm text-amber-500 disabled:opacity-50"
-              >
-                تعليق
-              </button>
-              <button
-                disabled={saving}
-                onClick={() => accountAction("ban")}
-                className="rounded-lg bg-gray-500/10 px-3 py-1.5 text-sm text-gray-500 disabled:opacity-50"
-              >
-                حظر
-              </button>
-            </div>
+            {canManageDrivers ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  disabled={saving}
+                  onClick={() => accountAction("approve")}
+                  className="rounded-lg bg-green-500/10 px-3 py-1.5 text-sm text-green-500 disabled:opacity-50"
+                >
+                  قبول الطلب
+                </button>
+                <button
+                  disabled={saving}
+                  onClick={() => accountAction("reject")}
+                  className="rounded-lg bg-red-500/10 px-3 py-1.5 text-sm text-red-500 disabled:opacity-50"
+                >
+                  رفض الطلب
+                </button>
+                <button
+                  disabled={saving}
+                  onClick={() => accountAction("suspend")}
+                  className="rounded-lg bg-amber-500/10 px-3 py-1.5 text-sm text-amber-500 disabled:opacity-50"
+                >
+                  تعليق
+                </button>
+                <button
+                  disabled={saving}
+                  onClick={() => accountAction("ban")}
+                  className="rounded-lg bg-gray-500/10 px-3 py-1.5 text-sm text-gray-500 disabled:opacity-50"
+                >
+                  حظر
+                </button>
+              </div>
+            ) : null}
             <p className="mt-2 text-xs text-gray-400">
               تُرسَل هذه الرسالة مع قرارك وتظهر للسائق فورًا في شاشة الحالة داخل
               التطبيق (قبول / رفض / انتظار).
@@ -371,20 +386,24 @@ export default function DriverDetailPage() {
                       </span>
                       <StatusBadge status={doc.status} />
                     </div>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => reviewDoc(doc.id, "APPROVED")}
-                        className="flex-1 rounded bg-green-500/10 px-2 py-1 text-xs text-green-500"
-                      >
-                        قبول
-                      </button>
-                      <button
-                        onClick={() => reviewDoc(doc.id, "REJECTED")}
-                        className="flex-1 rounded bg-red-500/10 px-2 py-1 text-xs text-red-500"
-                      >
-                        رفض
-                      </button>
-                    </div>
+                    {canReviewDocs ? (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => reviewDoc(doc.id, "APPROVED")}
+                          className="flex-1 rounded bg-green-500/10 px-2 py-1 text-xs text-green-500"
+                        >
+                          قبول
+                        </button>
+                        <button
+                          onClick={() => reviewDoc(doc.id, "REJECTED")}
+                          className="flex-1 rounded bg-red-500/10 px-2 py-1 text-xs text-red-500"
+                        >
+                          رفض
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400">عرض فقط</div>
+                    )}
                   </div>
                 </div>
               ))}

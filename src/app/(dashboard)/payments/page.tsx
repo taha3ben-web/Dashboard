@@ -8,6 +8,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { StatCard } from "@/components/StatCard";
 import { api } from "@/lib/api";
 import { dateTime, money, num } from "@/lib/format";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface PaymentRow {
   id: string;
@@ -70,6 +71,7 @@ const statusClass = (status: string): string => {
 };
 
 export default function PaymentsPage() {
+  const { can } = useAuth();
   const [rows, setRows] = useState<PaymentRow[]>([]);
   const [summary, setSummary] = useState<PaymentSummary | null>(null);
   const [total, setTotal] = useState(0);
@@ -80,6 +82,7 @@ export default function PaymentsPage() {
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const canManagePayments = can("payments.manage");
 
   const load = useCallback(() => {
     setError("");
@@ -116,6 +119,7 @@ export default function PaymentsPage() {
 
   const runAction = useCallback(
     async (id: string, action: "capture" | "refund" | "cancel") => {
+      if (!canManagePayments) return;
       setBusyId(id);
       setError("");
       try {
@@ -191,7 +195,7 @@ export default function PaymentsPage() {
             >
               التفاصيل
             </Link>
-            {(row.status === "PENDING" || row.status === "AUTHORIZED") && (
+            {canManagePayments && (row.status === "PENDING" || row.status === "AUTHORIZED") && (
               <button
                 onClick={() => void runAction(row.id, "capture")}
                 disabled={busyId === row.id}
@@ -200,7 +204,7 @@ export default function PaymentsPage() {
                 التقط
               </button>
             )}
-            {(row.status === "PENDING" || row.status === "AUTHORIZED") && (
+            {canManagePayments && (row.status === "PENDING" || row.status === "AUTHORIZED") && (
               <button
                 onClick={() => void runAction(row.id, "cancel")}
                 disabled={busyId === row.id}
@@ -209,7 +213,7 @@ export default function PaymentsPage() {
                 إلغاء
               </button>
             )}
-            {(row.status === "CAPTURED" || row.status === "PAID") && (
+            {canManagePayments && (row.status === "CAPTURED" || row.status === "PAID") && (
               <button
                 onClick={() => void runAction(row.id, "refund")}
                 disabled={busyId === row.id}
@@ -229,6 +233,12 @@ export default function PaymentsPage() {
     <>
       <Topbar title="المدفوعات" />
       <div className="space-y-4 p-6">
+        {!canManagePayments ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            لديك صلاحية قراءة فقط لهذه الصفحة. إجراءات الالتقاط والإلغاء والاسترداد مخفية حسب الدور.
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="إجمالي المدفوعات" value={num(summary?.totalCount)} icon={<CreditCard size={18} />} />
           <StatCard label="القيمة الكلية" value={money(summary?.totalAmount)} icon={<ShieldCheck size={18} />} accent="brand" />

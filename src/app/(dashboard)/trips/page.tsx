@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { StatCard } from "@/components/StatCard";
 import { api } from "@/lib/api";
 import { money, num, dateTime } from "@/lib/format";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface Trip {
   id: string;
@@ -35,6 +36,7 @@ const STATUSES = [
 ];
 
 export default function TripsPage() {
+  const { can } = useAuth();
   const [rows, setRows] = useState<Trip[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -43,6 +45,7 @@ export default function TripsPage() {
   const [unsettledOnly, setUnsettledOnly] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const canManageTrips = can("trips.manage");
 
   const load = useCallback(() => {
     setError("");
@@ -68,6 +71,7 @@ export default function TripsPage() {
   }, [load]);
 
   async function changeStatus(id: string, to: string) {
+    if (!canManageTrips) return;
     setBusyId(id);
     setError("");
     try {
@@ -81,6 +85,7 @@ export default function TripsPage() {
   }
 
   async function retrySettlement(id: string) {
+    if (!canManageTrips) return;
     setBusyId(id);
     setError("");
     try {
@@ -164,7 +169,7 @@ export default function TripsPage() {
       header: "إجراءات",
       render: (t) => (
         <div className="flex flex-wrap gap-2">
-          {t.status !== "CANCELLED" ? (
+          {canManageTrips && t.status !== "CANCELLED" ? (
             <button
               onClick={() => void changeStatus(t.id, "CANCELLED")}
               disabled={busyId === t.id}
@@ -173,7 +178,7 @@ export default function TripsPage() {
               إلغاء
             </button>
           ) : null}
-          {t.status === "COMPLETED" && !t.settledAt ? (
+          {canManageTrips && t.status === "COMPLETED" && !t.settledAt ? (
             <button
               onClick={() => void retrySettlement(t.id)}
               disabled={busyId === t.id}
@@ -182,6 +187,7 @@ export default function TripsPage() {
               إعادة التسوية
             </button>
           ) : null}
+          {!canManageTrips ? <span className="text-xs text-gray-400">عرض فقط</span> : null}
         </div>
       ),
     },
@@ -193,6 +199,12 @@ export default function TripsPage() {
     <>
       <Topbar title="الرحلات" />
       <div className="space-y-4 p-6">
+        {!canManageTrips ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            هذا الدور يطالع الرحلات فقط. أوامر إلغاء الرحلة وإعادة التسوية متاحة فقط لمن لديهم صلاحية إدارة الرحلات.
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="إجمالي المعروض" value={num(total)} icon={<Route size={18} />} />
           <StatCard label="المكتملة في الصفحة" value={num(completedTrips)} icon={<CheckCircle2 size={18} />} accent="green" />

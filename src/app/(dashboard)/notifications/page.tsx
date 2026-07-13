@@ -6,6 +6,7 @@ import { DataTable, Column } from "@/components/DataTable";
 import { api } from "@/lib/api";
 import { num, dateTime } from "@/lib/format";
 import { Send } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface NotificationRow {
   id: string;
@@ -39,12 +40,14 @@ const EMPTY = {
 };
 
 export default function NotificationsPage() {
+  const { can } = useAuth();
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [form, setForm] = useState(EMPTY);
   const [msg, setMsg] = useState("");
   const [sending, setSending] = useState(false);
+  const canSendNotifications = can("notifications.send");
 
   const load = useCallback(() => {
     api
@@ -61,6 +64,7 @@ export default function NotificationsPage() {
   }, [load]);
 
   async function sendNotification() {
+    if (!canSendNotifications) return;
     setMsg("");
     if (!form.title.trim() || !form.body.trim()) {
       setMsg("العنوان والنص مطلوبان");
@@ -116,56 +120,58 @@ export default function NotificationsPage() {
     <>
       <Topbar title="الإشعارات" />
       <div className="space-y-6 p-6">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <h2 className="mb-3 text-sm font-bold">إرسال إشعار</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <select
-              value={form.target}
-              onChange={(e) => setForm({ ...form, target: e.target.value })}
-              className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700 dark:bg-gray-900"
-            >
-              {TARGETS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={form.channel}
-              onChange={(e) => setForm({ ...form, channel: e.target.value })}
-              className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700 dark:bg-gray-900"
-            >
-              {CHANNELS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <input
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="العنوان"
-              className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700 sm:col-span-2"
-            />
-            <textarea
-              value={form.body}
-              onChange={(e) => setForm({ ...form, body: e.target.value })}
-              placeholder="نص الإشعار"
-              rows={3}
-              className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700 sm:col-span-2"
-            />
+        {canSendNotifications ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <h2 className="mb-3 text-sm font-bold">إرسال إشعار</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <select
+                value={form.target}
+                onChange={(e) => setForm({ ...form, target: e.target.value })}
+                className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700 dark:bg-gray-900"
+              >
+                {TARGETS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={form.channel}
+                onChange={(e) => setForm({ ...form, channel: e.target.value })}
+                className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700 dark:bg-gray-900"
+              >
+                {CHANNELS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="العنوان"
+                className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700 sm:col-span-2"
+              />
+              <textarea
+                value={form.body}
+                onChange={(e) => setForm({ ...form, body: e.target.value })}
+                placeholder="نص الإشعار"
+                rows={3}
+                className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand dark:border-gray-700 sm:col-span-2"
+              />
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                onClick={sendNotification}
+                disabled={sending}
+                className="flex items-center gap-1 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                <Send size={16} /> إرسال
+              </button>
+              {msg ? <span className="text-xs text-gray-500">{msg}</span> : null}
+            </div>
           </div>
-          <div className="mt-3 flex items-center gap-3">
-            <button
-              onClick={sendNotification}
-              disabled={sending}
-              className="flex items-center gap-1 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              <Send size={16} /> إرسال
-            </button>
-            {msg ? <span className="text-xs text-gray-500">{msg}</span> : null}
-          </div>
-        </div>
+        ) : null}
 
         <div className="space-y-4">
           <h2 className="text-lg font-bold">سجل الإشعارات</h2>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Topbar } from "@/components/Topbar";
@@ -10,8 +11,14 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { money, num, dateTime } from "@/lib/format";
+import { canAccessPath } from "@/lib/permissions";
+import { useAuth } from "@/providers/AuthProvider";
 import {
+  ArrowRightLeft,
+  Bot,
   Car,
+  KeyRound,
+  Megaphone,
   Users,
   Route,
   Activity,
@@ -19,6 +26,8 @@ import {
   Wifi,
   Briefcase,
   DollarSign,
+  ShieldAlert,
+  HandCoins,
 } from "lucide-react";
 import type { MapDriver } from "@/components/LiveMap";
 
@@ -50,11 +59,33 @@ interface Trip {
   passenger?: { name: string };
 }
 
+interface OperationsSnapshot {
+  queues: {
+    activeTrips: number;
+    openComplaints: number;
+    pendingWithdrawals: number;
+    openTickets: number;
+  };
+}
+
+const QUICK_LINKS = [
+  { href: "/operations", label: "العمليات والمراقبة", icon: Activity },
+  { href: "/withdrawals", label: "السحوبات", icon: Briefcase },
+  { href: "/driver-funding", label: "شحن السائقين", icon: HandCoins },
+  { href: "/driver-transfers", label: "تحويلات السائقين", icon: ArrowRightLeft },
+  { href: "/agents", label: "الوكلاء", icon: Bot },
+  { href: "/ads", label: "الإعلانات", icon: Megaphone },
+  { href: "/access-control", label: "الوصول والأدوار", icon: KeyRound },
+  { href: "/security-center", label: "مركز الأمان", icon: ShieldAlert },
+];
+
 export default function DashboardHome() {
+  const { permissions } = useAuth();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [earnings, setEarnings] = useState<Earnings | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [drivers, setDrivers] = useState<MapDriver[]>([]);
+  const [operations, setOperations] = useState<OperationsSnapshot | null>(null);
 
   useEffect(() => {
     api
@@ -72,6 +103,10 @@ export default function DashboardHome() {
     api
       .get("/dashboard/live-map")
       .then((r) => setDrivers(r.data.drivers ?? []))
+      .catch(() => {});
+    api
+      .get("/dashboard/operations")
+      .then((r) => setOperations(r.data ?? null))
       .catch(() => {});
 
     const socket = getSocket();
@@ -109,6 +144,10 @@ export default function DashboardHome() {
     { key: "fare", header: "التكلفة", render: (t) => money(t.fare) },
     { key: "createdAt", header: "الوقت", render: (t) => dateTime(t.createdAt) },
   ];
+
+  const visibleQuickLinks = QUICK_LINKS.filter((item) =>
+    canAccessPath(item.href, permissions),
+  );
 
   return (
     <>
@@ -179,11 +218,66 @@ export default function DashboardHome() {
           </div>
         </div>
 
+        <div className="grid gap-6 xl:grid-cols-2">
+          <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+            <h2 className="mb-4 font-bold">تنبيهات التشغيل</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <AlertTile label="رحلات نشطة" value={operations?.queues.activeTrips} accent="green" />
+              <AlertTile label="تذاكر مفتوحة" value={operations?.queues.openTickets} accent="amber" />
+              <AlertTile label="شكاوى مفتوحة" value={operations?.queues.openComplaints} accent="red" />
+              <AlertTile label="سحوبات معلقة" value={operations?.queues.pendingWithdrawals} accent="blue" />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+            <h2 className="mb-4 font-bold">اختصارات P1</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {visibleQuickLinks.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-brand hover:text-brand dark:border-gray-800 dark:text-gray-200"
+                  >
+                    <span>{item.label}</span>
+                    <Icon size={17} />
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
         <div>
           <h2 className="mb-3 font-bold">آخر الرحلات</h2>
           <DataTable columns={columns} rows={trips} />
         </div>
       </div>
     </>
+  );
+}
+
+function AlertTile({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value?: number;
+  accent: "green" | "amber" | "red" | "blue";
+}) {
+  const tones = {
+    green: "border-green-200 bg-green-50 text-green-700 dark:border-green-900/30 dark:bg-green-950/20 dark:text-green-300",
+    amber: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300",
+    red: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-300",
+    blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/30 dark:bg-blue-950/20 dark:text-blue-300",
+  } as const;
+
+  return (
+    <div className={`rounded-xl border p-4 ${tones[accent]}`}>
+      <div className="text-sm">{label}</div>
+      <div className="mt-2 text-2xl font-bold">{num(value)}</div>
+    </div>
   );
 }

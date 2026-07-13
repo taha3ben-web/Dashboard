@@ -6,6 +6,7 @@ import { DataTable, Column } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
 import { num, dateTime } from "@/lib/format";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface Passenger {
   id: string;
@@ -17,6 +18,7 @@ interface Passenger {
 }
 
 export default function PassengersPage() {
+  const { can } = useAuth();
   const [rows, setRows] = useState<Passenger[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -39,9 +41,12 @@ export default function PassengersPage() {
   }, [load]);
 
   async function act(id: string, action: string) {
+    if (!can("passengers.manage")) return;
     await api.patch(`/passengers/${id}/${action}`);
     load();
   }
+
+  const canManagePassengers = can("passengers.manage");
 
   const columns: Column<Passenger>[] = [
     { key: "name", header: "الاسم" },
@@ -62,24 +67,28 @@ export default function PassengersPage() {
       header: "إجراءات",
       render: (p) => (
         <div className="flex gap-1">
-          <button
-            onClick={() => act(p.id, "activate")}
-            className="rounded bg-green-500/10 px-2 py-1 text-xs text-green-500"
-          >
-            تفعيل
-          </button>
-          <button
-            onClick={() => act(p.id, "suspend")}
-            className="rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-500"
-          >
-            تعليق
-          </button>
-          <button
-            onClick={() => act(p.id, "ban")}
-            className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-500"
-          >
-            حظر
-          </button>
+          {canManagePassengers ? (
+            <>
+              <button
+                onClick={() => act(p.id, "activate")}
+                className="rounded bg-green-500/10 px-2 py-1 text-xs text-green-500"
+              >
+                تفعيل
+              </button>
+              <button
+                onClick={() => act(p.id, "suspend")}
+                className="rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-500"
+              >
+                تعليق
+              </button>
+              <button
+                onClick={() => act(p.id, "ban")}
+                className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-500"
+              >
+                حظر
+              </button>
+            </>
+          ) : null}
         </div>
       ),
     },
@@ -91,6 +100,12 @@ export default function PassengersPage() {
     <>
       <Topbar title="إدارة الركاب" />
       <div className="space-y-4 p-6">
+        {!canManagePassengers ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            هذه الصفحة في وضع القراءة فقط. إجراءات التفعيل والتعليق والحظر متاحة فقط لمن لديهم صلاحية إدارة الركاب.
+          </div>
+        ) : null}
+
         <input
           value={search}
           onChange={(e) => {

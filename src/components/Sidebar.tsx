@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
+import { useAuth } from "@/providers/AuthProvider";
+import { canAccessPath } from "@/lib/permissions";
 import {
   LayoutDashboard,
   Car,
@@ -10,8 +12,12 @@ import {
   Route,
   Map,
   Wallet,
+  HandCoins,
+  ArrowRightLeft,
+  Briefcase,
   Ticket,
   Bell,
+  Activity,
   LifeBuoy,
   Settings,
   Smartphone,
@@ -23,6 +29,10 @@ import {
   BookOpen,
   Boxes,
   CreditCard,
+  ShieldAlert,
+  Bot,
+  Megaphone,
+  KeyRound,
 } from "lucide-react";
 
 const LINKS = [
@@ -33,12 +43,21 @@ const LINKS = [
   { href: "/live-map", label: "الخريطة الحية", icon: Map },
   { href: "/earnings", label: "الأرباح", icon: Wallet },
   { href: "/wallets", label: "الحسابات المالية", icon: BookOpen },
+  { href: "/driver-funding", label: "شحن السائقين", icon: HandCoins },
+  { href: "/driver-transfers", label: "تحويلات السائقين", icon: ArrowRightLeft },
+  { href: "/withdrawals", label: "السحوبات", icon: Briefcase },
   { href: "/financial-dashboard", label: "لوحة المالية", icon: Wallet },
   { href: "/financial-control", label: "المطابقة والتسوية", icon: ShieldAlert },
   { href: "/payments", label: "المدفوعات", icon: CreditCard },
   { href: "/reports", label: "التقارير", icon: BarChart3 },
   { href: "/coupons", label: "الكوبونات", icon: Ticket },
   { href: "/notifications", label: "الإشعارات", icon: Bell },
+  { href: "/operations", label: "العمليات والمراقبة", icon: Activity },
+  { href: "/agents", label: "الوكلاء", icon: Bot },
+  { href: "/ads", label: "الإعلانات", icon: Megaphone },
+  { href: "/access-control", label: "الوصول والأدوار", icon: KeyRound },
+  { href: "/security-center", label: "مركز الأمان", icon: ShieldAlert },
+  { href: "/safety", label: "السلامة", icon: ShieldAlert },
   { href: "/support", label: "الدعم الفني", icon: LifeBuoy },
   { href: "/app-versions", label: "إصدارات التطبيق", icon: Smartphone },
   { href: "/settings", label: "الإعدادات", icon: Settings },
@@ -56,6 +75,7 @@ const CATALOG_LINKS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { permissions } = useAuth();
 
   const linkClass = (active: boolean) =>
     clsx(
@@ -74,7 +94,7 @@ export function Sidebar() {
         <span className="text-lg font-bold">NOVA Ride</span>
       </div>
       <nav className="space-y-1">
-        {LINKS.map((link) => {
+        {LINKS.filter((link) => canAccessPath(link.href, permissions)).map((link) => {
           const Icon = link.icon;
           const active =
             link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
@@ -92,7 +112,7 @@ export function Sidebar() {
             <Boxes size={14} />
             الكتالوج
           </div>
-          {CATALOG_LINKS.map((link) => {
+          {CATALOG_LINKS.filter((link) => canAccessPath(link.href, permissions)).map((link) => {
             const Icon = link.icon;
             const active = pathname.startsWith(link.href);
             return (

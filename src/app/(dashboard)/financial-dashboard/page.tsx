@@ -14,6 +14,8 @@ import { Topbar } from "@/components/Topbar";
 import { StatCard } from "@/components/StatCard";
 import { api } from "@/lib/api";
 import { money, num } from "@/lib/format";
+import { canAccessPath } from "@/lib/permissions";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface Revenue {
   companyEarnings: number;
@@ -81,6 +83,7 @@ interface FinancialHealth {
 }
 
 export default function FinancialDashboardPage() {
+  const { permissions } = useAuth();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [revenue, setRevenue] = useState<Revenue | null>(null);
@@ -90,6 +93,18 @@ export default function FinancialDashboardPage() {
   const [transferOps, setTransferOps] = useState<TransferOps | null>(null);
   const [health, setHealth] = useState<FinancialHealth | null>(null);
   const [error, setError] = useState("");
+
+  const quickLinks = [
+    { href: "/financial-control", label: "المطابقة والتسوية" },
+    { href: "/payments", label: "إدارة المدفوعات" },
+    { href: "/withdrawals", label: "تشغيل السحوبات" },
+    { href: "/driver-funding", label: "شحن السائقين" },
+    { href: "/driver-transfers", label: "تحويلات السائقين" },
+    { href: "/operations", label: "غرفة العمليات" },
+    { href: "/earnings", label: "تشغيل السحوبات والأرباح" },
+    { href: "/financial-transactions", label: "قيود الدفتر المالي" },
+    { href: "/reports", label: "التقارير التشغيلية" },
+  ].filter((item) => canAccessPath(item.href, permissions));
 
   const params = useMemo(() => {
     const next: Record<string, string> = {};
@@ -255,11 +270,9 @@ export default function FinancialDashboardPage() {
           </Panel>
 
           <Panel title="روابط تشغيل سريعة">
-            <QuickLink href="/financial-control" label="المطابقة والتسوية" />
-            <QuickLink href="/payments" label="إدارة المدفوعات" />
-            <QuickLink href="/earnings" label="تشغيل السحوبات والأرباح" />
-            <QuickLink href="/financial-transactions" label="قيود الدفتر المالي" />
-            <QuickLink href="/reports" label="التقارير التشغيلية" />
+            {quickLinks.map((item) => (
+              <QuickLink key={item.href} href={item.href} label={item.label} />
+            ))}
           </Panel>
         </section>
       </div>

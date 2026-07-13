@@ -7,6 +7,7 @@ import { StatCard } from "@/components/StatCard";
 import { DataTable, type Column } from "@/components/DataTable";
 import { api } from "@/lib/api";
 import { dateTime, money, num } from "@/lib/format";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface ReconciliationSummary {
   completedTrips: number;
@@ -63,6 +64,7 @@ const TYPES = [
 ];
 
 export default function FinancialControlPage() {
+  const { can } = useAuth();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [type, setType] = useState("");
@@ -78,6 +80,7 @@ export default function FinancialControlPage() {
   const [runResult, setRunResult] = useState<SettlementRunResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const canManagePayments = can("payments.manage");
 
   const params = useMemo(() => {
     const next: Record<string, string | number | boolean> = {};
@@ -124,6 +127,7 @@ export default function FinancialControlPage() {
   }, [load]);
 
   async function runSettlementBatch() {
+    if (!canManagePayments) return;
     setBusy(true);
     setError("");
     try {
@@ -224,6 +228,12 @@ export default function FinancialControlPage() {
     <>
       <Topbar title="المطابقة والتسوية" />
       <div className="space-y-6 p-6">
+        {!canManagePayments ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            هذا الدور يستطيع مراجعة فروقات المطابقة وطابور التسوية فقط. تشغيل دفعات التسوية مخفي حتى تتوفر صلاحية الإدارة المالية.
+          </div>
+        ) : null}
+
         <section className="flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
           <div>
             <div className="mb-1 text-xs text-gray-500">من</div>
@@ -292,13 +302,15 @@ export default function FinancialControlPage() {
           >
             تحديث
           </button>
-          <button
-            onClick={() => void runSettlementBatch()}
-            disabled={busy}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            تشغيل دفعة التسوية
-          </button>
+          {canManagePayments ? (
+            <button
+              onClick={() => void runSettlementBatch()}
+              disabled={busy}
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              تشغيل دفعة التسوية
+            </button>
+          ) : null}
         </section>
 
         {error ? <div className="text-sm text-red-500">{error}</div> : null}

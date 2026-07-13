@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { Trash2, Plus } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface AppVersion {
   id: string;
@@ -27,9 +28,11 @@ const EMPTY = {
 };
 
 export default function AppVersionsPage() {
+  const { can } = useAuth();
   const [rows, setRows] = useState<AppVersion[]>([]);
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
+  const canManageSettings = can("settings.manage");
 
   const load = useCallback(() => {
     api
@@ -43,6 +46,7 @@ export default function AppVersionsPage() {
   }, [load]);
 
   async function create() {
+    if (!canManageSettings) return;
     if (!form.version.trim()) return;
     setSaving(true);
     try {
@@ -61,6 +65,7 @@ export default function AppVersionsPage() {
   }
 
   async function remove(id: string) {
+    if (!canManageSettings) return;
     await api.delete(`/app-versions/${id}`);
     load();
   }
@@ -106,13 +111,17 @@ export default function AppVersionsPage() {
       key: "actions",
       header: "حذف",
       render: (v) => (
-        <button
-          onClick={() => remove(v.id)}
-          className="flex items-center gap-1 rounded-lg border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
-        >
-          <Trash2 size={14} />
-          حذف
-        </button>
+        canManageSettings ? (
+          <button
+            onClick={() => remove(v.id)}
+            className="flex items-center gap-1 rounded-lg border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
+          >
+            <Trash2 size={14} />
+            حذف
+          </button>
+        ) : (
+          <span className="text-xs text-gray-400">عرض فقط</span>
+        )
       ),
     },
   ];
@@ -121,57 +130,65 @@ export default function AppVersionsPage() {
     <>
       <Topbar title="إصدارات التطبيق" />
       <div className="space-y-6 p-6">
-        <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <h2 className="mb-3 text-lg font-bold">إضافة إصدار جديد</h2>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
-            <select
-              value={form.platform}
-              onChange={(e) => setForm({ ...form, platform: e.target.value })}
-              className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-gray-700"
-            >
-              <option value="android">Android</option>
-              <option value="ios">iOS</option>
-            </select>
-            <input
-              value={form.version}
-              onChange={(e) => setForm({ ...form, version: e.target.value })}
-              placeholder="الإصدار (مثال 1.2.0)"
-              className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-gray-700"
-            />
-            <input
-              value={form.minSupported}
-              onChange={(e) =>
-                setForm({ ...form, minSupported: e.target.value })
-              }
-              placeholder="أدنى إصدار مدعوم"
-              className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-gray-700"
-            />
-            <input
-              value={form.url}
-              onChange={(e) => setForm({ ...form, url: e.target.value })}
-              placeholder="رابط التحديث"
-              className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-gray-700"
-            />
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.forceUpdate}
-                onChange={(e) =>
-                  setForm({ ...form, forceUpdate: e.target.checked })
-                }
-              />
-              تحديث إجباري
-            </label>
+        {!canManageSettings ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            هذه الصفحة في وضع القراءة فقط لهذا الدور. إضافة الإصدارات أو حذفها متاح فقط لصلاحية إدارة الإعدادات.
           </div>
-          <button
-            onClick={create}
-            disabled={saving || !form.version.trim()}
-            className="mt-3 flex items-center gap-1 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-          >
-            <Plus size={16} />
-            إضافة
-          </button>
-        </section>
+        ) : null}
+
+        {canManageSettings ? (
+          <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <h2 className="mb-3 text-lg font-bold">إضافة إصدار جديد</h2>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+              <select
+                value={form.platform}
+                onChange={(e) => setForm({ ...form, platform: e.target.value })}
+                className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-gray-700"
+              >
+                <option value="android">Android</option>
+                <option value="ios">iOS</option>
+              </select>
+              <input
+                value={form.version}
+                onChange={(e) => setForm({ ...form, version: e.target.value })}
+                placeholder="الإصدار (مثال 1.2.0)"
+                className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-gray-700"
+              />
+              <input
+                value={form.minSupported}
+                onChange={(e) =>
+                  setForm({ ...form, minSupported: e.target.value })
+                }
+                placeholder="أدنى إصدار مدعوم"
+                className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-gray-700"
+              />
+              <input
+                value={form.url}
+                onChange={(e) => setForm({ ...form, url: e.target.value })}
+                placeholder="رابط التحديث"
+                className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-gray-700"
+              />
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.forceUpdate}
+                  onChange={(e) =>
+                    setForm({ ...form, forceUpdate: e.target.checked })
+                  }
+                />
+                تحديث إجباري
+              </label>
+            </div>
+            <button
+              onClick={create}
+              disabled={saving || !form.version.trim()}
+              className="mt-3 flex items-center gap-1 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            >
+              <Plus size={16} />
+              إضافة
+            </button>
+          </section>
+        ) : null}
 
         <DataTable columns={columns} rows={rows} />
       </div>
