@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DatabaseBackup, Plus, Trash2, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Plus, Trash2, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Topbar } from "@/components/Topbar";
 import { DataTable, type Column } from "@/components/DataTable";
 import { api, getApiErrorMessage } from "@/lib/api";
@@ -195,7 +195,7 @@ export default function BackupsPage() {
 
   return (
     <div className="space-y-4">
-      <Topbar title="النسخ الاحتياطي والتعافي" icon={DatabaseBackup} />
+      <Topbar title="النسخ الاحتياطي والتعافي" />
 
       {dr && (
         <div
