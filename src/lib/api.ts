@@ -27,7 +27,12 @@ export function getApiErrorMessage(
   if (axios.isAxiosError(error)) {
     const payload = error.response?.data as
       { error?: unknown; message?: unknown } | undefined;
-    const candidate = payload?.error ?? payload?.message;
+    const envelopeError =
+      payload?.error && typeof payload.error === "object"
+        ? (payload.error as { message?: unknown })
+        : undefined;
+    const candidate =
+      envelopeError?.message ?? payload?.error ?? payload?.message;
 
     if (Array.isArray(candidate)) {
       return candidate.map((item) => String(item)).join("، ");
@@ -45,6 +50,17 @@ export function getApiErrorMessage(
   }
 
   return fallback;
+}
+
+export function getApiErrorCode(error: unknown): string | undefined {
+  if (!axios.isAxiosError(error)) return undefined;
+  const payload = error.response?.data as
+    | { error?: { code?: unknown } | string }
+    | undefined;
+  return payload?.error && typeof payload.error === "object" &&
+    typeof payload.error.code === "string"
+    ? payload.error.code
+    : undefined;
 }
 
 export function getApiStatus(error: unknown): number | undefined {

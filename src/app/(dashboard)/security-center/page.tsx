@@ -49,6 +49,33 @@ interface SessionBulkDialogState {
   target: "mine" | "other";
 }
 
+interface ReadinessResponse {
+  ok: boolean;
+  ts: string;
+  checks: {
+    db: { ok: boolean; latencyMs?: number; error?: string };
+    redis: { ok: boolean; latencyMs?: number; error?: string };
+  };
+  counters: {
+    sessionCount: number;
+    pendingSettingApprovals: number;
+    activeFeatureFlags: number;
+    publishedVehicleTypes: number;
+    recentAuditEvents: number;
+    recentActivityEvents: number;
+  };
+  featureFlags: {
+    globalKillSwitch: boolean;
+    globalKillReason?: string | null;
+  };
+  config: {
+    value?: unknown;
+    publishedValue?: unknown;
+    updatedAt?: string | null;
+  };
+  alerts: string[];
+}
+
 export default function SecurityCenterPage() {
   const { can, profile } = useAuth();
   const [auditRows, setAuditRows] = useState<AuditRow[]>([]);
@@ -71,7 +98,9 @@ export default function SecurityCenterPage() {
   const [auditLoading, setAuditLoading] = useState(false);
   const [activityLoading, setActivityLoading] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [readinessLoading, setReadinessLoading] = useState(false);
   const [busyAction, setBusyAction] = useState("");
+  const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
   const [revokeDialog, setRevokeDialog] = useState<SessionRevokeDialogState>({
     open: false,
     session: null,
@@ -166,6 +195,20 @@ export default function SecurityCenterPage() {
     }
   }, [activeSessionTargetUserId]);
 
+  const loadReadiness = useCallback(async () => {
+    setReadinessLoading(true);
+    try {
+      const response = await api.get("/dashboard/readiness");
+      setReadiness(response.data ?? null);
+      setError("");
+    } catch (loadError) {
+      setReadiness(null);
+      setError(getApiErrorMessage(loadError, "تعذّر تحميل حالة الجاهزية"));
+    } finally {
+      setReadinessLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadAudit();
   }, [loadAudit]);
@@ -177,6 +220,10 @@ export default function SecurityCenterPage() {
   useEffect(() => {
     void loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    void loadReadiness();
+  }, [loadReadiness]);
 
   const visibleSessions = useMemo(() => {
     const start = (sessionPage - 1) * SESSION_PAGE_SIZE;
@@ -209,7 +256,12 @@ export default function SecurityCenterPage() {
 
   async function refreshAll() {
     clearFeedback();
-    await Promise.all([loadAudit(), loadActivity(), loadSessions()]);
+    await Promise.all([
+      loadAudit(),
+      loadActivity(),
+      loadSessions(),
+      loadReadiness(),
+    ]);
     setSuccess("تم تحديث السجلات والجلسات.");
   }
 
@@ -354,6 +406,76 @@ export default function SecurityCenterPage() {
             معروضة: {num(sessionRows.length)}
           </div>
         </div>
+
+        <section className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-bold">الجاهزية الإنتاجية</h2>
+              <div className="text-sm text-gray-500">
+                آخر تحديث: {dateTime(readiness?.ts)}
+              </div>
+            </div>
+            <span
+              className={
+                readiness?.ok
+                  ? "rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-600"
+                  : "rounded-full bg-amber-500/10 px-3 py-1 text-xs text-amber-600"
+              }
+            >
+              {readinessLoading
+                ? "جارٍ الفحص..."
+                : readiness?.ok
+                  ? "جاهز"
+                  : "بحاجة مراجعة"}
+            </span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+              <div className="text-xs text-gray-500">DB / Redis</div>
+              <div className="mt-1 text-sm font-medium">
+                {readiness?.checks.db.ok ? "DB OK" : "DB FAIL"} ·{" "}
+                {readiness?.checks.redis.ok ? "Redis OK" : "Redis FAIL"}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+              <div className="text-xs text-gray-500">الجلسات النشطة</div>
+              <div className="mt-1 text-sm font-medium">
+                {num(readiness?.counters.sessionCount)}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+              <div className="text-xs text-gray-500">
+                طلبات الإعدادات المعلقة
+              </div>
+              <div className="mt-1 text-sm font-medium">
+                {num(readiness?.counters.pendingSettingApprovals)}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+              <div className="text-xs text-gray-500">Feature Flags المفعلة</div>
+              <div className="mt-1 text-sm font-medium">
+                {num(readiness?.counters.activeFeatureFlags)}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+              <div className="text-xs text-gray-500">أنواع مركبات منشورة</div>
+              <div className="mt-1 text-sm font-medium">
+                {num(readiness?.counters.publishedVehicleTypes)}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+              <div className="text-xs text-gray-500">Kill Switch عام</div>
+              <div className="mt-1 text-sm font-medium">
+                {readiness?.featureFlags.globalKillSwitch ? "مفعل" : "متوقف"}
+              </div>
+            </div>
+          </div>
+          {readiness?.alerts?.length ? (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+              {readiness.alerts.join(" • ")}
+            </div>
+          ) : null}
+        </section>
 
         {success ? (
           <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900/40 dark:bg-green-950/20 dark:text-green-300">

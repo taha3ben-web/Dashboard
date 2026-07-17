@@ -1,10 +1,17 @@
-export function money(value: number | string | null | undefined): string {
+export function money(
+  value: number | string | null | undefined,
+  currency = process.env.NEXT_PUBLIC_DEFAULT_CURRENCY ?? "DZD",
+): string {
   const n = Number(value ?? 0);
-  return new Intl.NumberFormat("ar-DZ", {
-    style: "currency",
-    currency: "DZD",
-    maximumFractionDigits: 0,
-  }).format(n);
+  try {
+    return new Intl.NumberFormat("ar-DZ", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return `${new Intl.NumberFormat("ar-DZ", { maximumFractionDigits: 2 }).format(n)} ${currency}`;
+  }
 }
 
 export function dateTime(value: string | Date | null | undefined): string {

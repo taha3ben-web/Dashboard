@@ -41,13 +41,25 @@ export default function WithdrawalsPage() {
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const canManagePayments = can("payments.manage");
 
   const load = useCallback(() => {
     setError("");
     Promise.all([
-      api.get("/withdrawals", { params: { page, limit: 20, status: status || undefined, search: search || undefined } }),
-      api.get("/withdrawals/summary", { params: { status: status || undefined, search: search || undefined } }),
+      api.get("/withdrawals", {
+        params: {
+          page,
+          limit: 20,
+          status: status || undefined,
+          search: search || undefined,
+        },
+      }),
+      api.get("/withdrawals/summary", {
+        params: { status: status || undefined, search: search || undefined },
+      }),
     ])
       .then(([rowsResponse, summaryResponse]) => {
         setRows(rowsResponse.data.items ?? []);
@@ -66,14 +78,43 @@ export default function WithdrawalsPage() {
     void load();
   }, [load]);
 
-  async function process(id: string, action: "approve" | "paid" | "reject") {
-    if (!canManagePayments) return;
-    const note = window.prompt("ملاحظة العملية:") ?? undefined;
+  async function process(
+    row: WithdrawalRow,
+    action: "approve" | "paid" | "reject",
+  ) {
+    if (!canManagePayments || busyId) return;
+    const allowed =
+      (row.status === "PENDING" &&
+        (action === "approve" || action === "reject")) ||
+      (row.status === "APPROVED" && action === "paid");
+    if (!allowed) {
+      setError("انتقال حالة السحب غير مسموح.");
+      return;
+    }
+    const label =
+      action === "approve" ? "اعتماد" : action === "paid" ? "تأكيد دفع" : "رفض";
+    if (!window.confirm(`${label} طلب السحب؟`)) return;
+    const note =
+      action === "reject"
+        ? window.prompt("سبب الرفض (مطلوب):")?.trim()
+        : window.prompt("ملاحظة العملية (اختيارية):")?.trim();
+    if (action === "reject" && !note) {
+      setError("سبب الرفض مطلوب للتدقيق.");
+      return;
+    }
+    setBusyId(row.id);
+    setError("");
+    setNotice("");
     try {
-      await api.patch(`/withdrawals/${id}/${action}`, { note });
-      load();
+      await api.patch(`/withdrawals/${row.id}/${action}`, {
+        note: note || undefined,
+      });
+      setNotice(`تم ${label} الطلب بنجاح.`);
+      await load();
     } catch (actionError) {
       setError(getApiErrorMessage(actionError, "تعذّر تنفيذ العملية"));
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -89,10 +130,22 @@ export default function WithdrawalsPage() {
       ),
     },
     { key: "amount", header: "المبلغ", render: (row) => money(row.amount) },
-    { key: "status", header: "الحالة", render: (row) => <StatusBadge status={row.status} /> },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (row) => <StatusBadge status={row.status} />,
+    },
     { key: "note", header: "الملاحظة", render: (row) => row.note ?? "-" },
-    { key: "createdAt", header: "الإنشاء", render: (row) => dateTime(row.createdAt) },
-    { key: "processedAt", header: "المعالجة", render: (row) => dateTime(row.processedAt) },
+    {
+      key: "createdAt",
+      header: "الإنشاء",
+      render: (row) => dateTime(row.createdAt),
+    },
+    {
+      key: "processedAt",
+      header: "المعالجة",
+      render: (row) => dateTime(row.processedAt),
+    },
     {
       key: "actions",
       header: "الإجراء",
@@ -101,22 +154,22 @@ export default function WithdrawalsPage() {
           {canManagePayments ? (
             <>
               <button
-                disabled={row.status !== "PENDING"}
-                onClick={() => void process(row.id, "approve")}
+                disabled={row.status !== "PENDING" || busyId === row.id}
+                onClick={() => void process(row, "approve")}
                 className="rounded bg-blue-500/10 px-2 py-1 text-xs text-blue-600 disabled:opacity-30"
               >
                 اعتماد
               </button>
               <button
-                disabled={row.status !== "APPROVED" && row.status !== "PENDING"}
-                onClick={() => void process(row.id, "paid")}
+                disabled={row.status !== "APPROVED" || busyId === row.id}
+                onClick={() => void process(row, "paid")}
                 className="rounded bg-green-500/10 px-2 py-1 text-xs text-green-600 disabled:opacity-30"
               >
                 تم الدفع
               </button>
               <button
-                disabled={row.status !== "PENDING"}
-                onClick={() => void process(row.id, "reject")}
+                disabled={row.status !== "PENDING" || busyId === row.id}
+                onClick={() => void process(row, "reject")}
                 className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-600 disabled:opacity-30"
               >
                 رفض
@@ -136,22 +189,45 @@ export default function WithdrawalsPage() {
       <div className="space-y-6 p-6">
         {!canManagePayments ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
-            الصفحة في وضع القراءة فقط لهذا الدور. أوامر الاعتماد والدفع والرفض متاحة فقط لمن لديهم صلاحية الإدارة المالية.
+            الصفحة في وضع القراءة فقط لهذا الدور. أوامر الاعتماد والدفع والرفض
+            متاحة فقط لمن لديهم صلاحية الإدارة المالية.
           </div>
         ) : null}
 
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
           <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
             <Briefcase size={18} />
-            <span className="font-medium">تشغيل دورة السحب واعتماد الدفعات من لوحة التحكم</span>
+            <span className="font-medium">
+              المسار المحكوم: PENDING → APPROVED → PAID، أو PENDING → REJECTED
+            </span>
           </div>
         </div>
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="إجمالي الطلبات" value={num(summary?.totalCount)} icon={<Briefcase size={18} />} accent="blue" />
-          <StatCard label="إجمالي القيمة" value={money(summary?.totalAmount)} icon={<Briefcase size={18} />} accent="green" />
-          <StatCard label="قيد الانتظار" value={num(summary?.pendingCount)} icon={<Briefcase size={18} />} accent="amber" />
-          <StatCard label="مدفوعة" value={num(summary?.paidCount)} icon={<Briefcase size={18} />} accent="green" />
+          <StatCard
+            label="إجمالي الطلبات"
+            value={num(summary?.totalCount)}
+            icon={<Briefcase size={18} />}
+            accent="blue"
+          />
+          <StatCard
+            label="إجمالي القيمة"
+            value={money(summary?.totalAmount)}
+            icon={<Briefcase size={18} />}
+            accent="green"
+          />
+          <StatCard
+            label="قيد الانتظار"
+            value={num(summary?.pendingCount)}
+            icon={<Briefcase size={18} />}
+            accent="amber"
+          />
+          <StatCard
+            label="مدفوعة"
+            value={num(summary?.paidCount)}
+            icon={<Briefcase size={18} />}
+            accent="green"
+          />
         </section>
 
         <div className="flex flex-wrap gap-2">
@@ -180,15 +256,34 @@ export default function WithdrawalsPage() {
           />
         </div>
 
-        {error ? <div className="text-sm text-red-600">{error}</div> : null}
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+            {error}
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+            {notice}
+          </div>
+        ) : null}
         <DataTable columns={columns} rows={rows} empty="لا توجد طلبات سحب" />
 
         <div className="flex justify-between text-sm text-gray-500">
           <span>الإجمالي: {num(total)}</span>
           <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>السابق</button>
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((value) => value - 1)}
+            >
+              السابق
+            </button>
             <span>{page}</span>
-            <button disabled={page * 20 >= total} onClick={() => setPage((value) => value + 1)}>التالي</button>
+            <button
+              disabled={page * 20 >= total}
+              onClick={() => setPage((value) => value + 1)}
+            >
+              التالي
+            </button>
           </div>
         </div>
       </div>

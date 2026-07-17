@@ -134,6 +134,14 @@ export interface VehicleType {
   requiresApproval?: boolean;
   visibleToPassengers?: boolean;
   visibleToDrivers?: boolean;
+  appIds?: string[];
+  clientOs?: string[];
+  countryCodes?: string[];
+  audienceSegments?: string[];
+  minAppVersion?: string | null;
+  maxAppVersion?: string | null;
+  badgeText?: string | null;
+  etaMinutes?: number | null;
   iconType: string;
   iconValue?: string | null;
   iconUrl?: string | null;
@@ -155,6 +163,7 @@ export interface VehicleType {
   features?: Array<{ feature: Feature }>;
   fields?: VehicleField[];
   pricingRules?: PricingRule[];
+  resolvedPricing?: PricingRule | null;
   _count?: { pricingRules?: number; vehicles?: number };
 }
 
@@ -197,6 +206,11 @@ export interface PricingRule {
   cityId?: string | null;
   customerType?: string | null;
   couponCode?: string | null;
+  appIds?: string[];
+  clientOs?: string[];
+  audienceSegments?: string[];
+  minAppVersion?: string | null;
+  maxAppVersion?: string | null;
   startTime?: string | null;
   endTime?: string | null;
   daysOfWeek?: number[];
@@ -208,6 +222,7 @@ export interface PricingRule {
   maxFare?: number | string | null;
   commissionPct?: number | string | null;
   currency?: string | null;
+  metadata?: Record<string, unknown> | null;
   priority: number;
   isActive: boolean;
   version: number;

@@ -1,205 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, CheckCircle2, Clock3, Loader2, RefreshCw } from "lucide-react";
 import { Topbar } from "@/components/Topbar";
-import { DataTable, Column } from "@/components/DataTable";
+import { DataTable, type Column } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
-import { api } from "@/lib/api";
-import { num, dateTime } from "@/lib/format";
+import { api, getApiErrorCode, getApiErrorMessage } from "@/lib/api";
+import { dateTime, num } from "@/lib/format";
+import { useAuth } from "@/providers/AuthProvider";
 
-interface Ticket {
-  id: string;
-  subject: string;
-  category?: string | null;
-  status: string;
-  createdAt: string;
-  user?: { name: string; phone: string };
-}
-
-interface Complaint {
-  id: string;
-  message: string;
-  status: string;
-  createdAt: string;
-  fromUser?: { name: string; phone: string };
-  againstUser?: { name: string; phone: string } | null;
-}
-
-type Tab = "tickets" | "complaints";
-
+interface Ticket { id: string; subject: string; category?: string | null; status: string; priority?: string; slaDueAt?: string | null; firstResponseAt?: string | null; escalationLevel?: number; breached?: boolean; createdAt: string; user?: { name: string; phone: string }; }
+interface Complaint { id: string; message: string; status: string; createdAt: string; fromUser?: { name: string; phone: string }; againstUser?: { name: string; phone: string } | null; }
 const TICKET_STATUSES = ["OPEN", "PENDING", "RESOLVED", "CLOSED"];
 const COMPLAINT_STATUSES = ["OPEN", "REVIEWING", "RESOLVED"];
 
 export default function SupportPage() {
-  const [tab, setTab] = useState<Tab>("tickets");
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-
-  const load = useCallback(() => {
-    if (tab === "tickets") {
-      api
-        .get("/support/tickets", { params: { page, limit: 20 } })
-        .then((r) => {
-          setTickets(r.data.items ?? []);
-          setTotal(r.data.total ?? 0);
-        })
-        .catch(() => {});
-    } else {
-      api
-        .get("/support/complaints", { params: { page, limit: 20 } })
-        .then((r) => {
-          setComplaints(r.data.items ?? []);
-          setTotal(r.data.total ?? 0);
-        })
-        .catch(() => {});
-    }
-  }, [tab, page]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  async function setTicketStatus(id: string, status: string) {
-    await api.patch(`/support/tickets/${id}/status`, { status });
-    load();
-  }
-
-  async function setComplaintStatus(id: string, status: string) {
-    await api.patch(`/support/complaints/${id}/status`, { status });
-    load();
-  }
-
-  const ticketColumns: Column<Ticket>[] = [
-    { key: "subject", header: "الموضوع", render: (t) => <b>{t.subject}</b> },
-    { key: "user", header: "المستخدم", render: (t) => t.user?.name ?? "-" },
-    { key: "category", header: "التصنيف", render: (t) => t.category ?? "-" },
-    {
-      key: "status",
-      header: "الحالة",
-      render: (t) => <StatusBadge status={t.status} />,
-    },
-    {
-      key: "createdAt",
-      header: "التاريخ",
-      render: (t) => dateTime(t.createdAt),
-    },
-    {
-      key: "actions",
-      header: "تغيير الحالة",
-      render: (t) => (
-        <select
-          value={t.status}
-          onChange={(e) => setTicketStatus(t.id, e.target.value)}
-          className="rounded border border-gray-300 bg-transparent px-2 py-1 text-xs outline-none dark:border-gray-700 dark:bg-gray-900"
-        >
-          {TICKET_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      ),
-    },
-  ];
-
-  const complaintColumns: Column<Complaint>[] = [
-    { key: "message", header: "الشكوى", render: (c) => c.message },
-    { key: "from", header: "من", render: (c) => c.fromUser?.name ?? "-" },
-    { key: "against", header: "ضد", render: (c) => c.againstUser?.name ?? "-" },
-    {
-      key: "status",
-      header: "الحالة",
-      render: (c) => <StatusBadge status={c.status} />,
-    },
-    {
-      key: "createdAt",
-      header: "التاريخ",
-      render: (c) => dateTime(c.createdAt),
-    },
-    {
-      key: "actions",
-      header: "تغيير الحالة",
-      render: (c) => (
-        <select
-          value={c.status}
-          onChange={(e) => setComplaintStatus(c.id, e.target.value)}
-          className="rounded border border-gray-300 bg-transparent px-2 py-1 text-xs outline-none dark:border-gray-700 dark:bg-gray-900"
-        >
-          {COMPLAINT_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      ),
-    },
-  ];
-
-  const pages = Math.max(1, Math.ceil(total / 20));
-
-  function switchTab(next: Tab) {
-    setTab(next);
-    setPage(1);
-  }
-
-  return (
-    <>
-      <Topbar title="الدعم والشكاوى" />
-      <div className="space-y-4 p-6">
-        <div className="flex gap-2">
-          <button
-            onClick={() => switchTab("tickets")}
-            className={
-              tab === "tickets"
-                ? "rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
-                : "rounded-lg border border-gray-300 px-4 py-2 text-sm dark:border-gray-700"
-            }
-          >
-            تذاكر الدعم
-          </button>
-          <button
-            onClick={() => switchTab("complaints")}
-            className={
-              tab === "complaints"
-                ? "rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
-                : "rounded-lg border border-gray-300 px-4 py-2 text-sm dark:border-gray-700"
-            }
-          >
-            الشكاوى
-          </button>
-        </div>
-
-        {tab === "tickets" ? (
-          <DataTable columns={ticketColumns} rows={tickets} />
-        ) : (
-          <DataTable columns={complaintColumns} rows={complaints} />
-        )}
-
-        <div className="flex items-center justify-between text-sm text-gray-500">
-          <span>الإجمالي: {num(total)}</span>
-          <div className="flex gap-2">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="rounded border border-gray-300 px-3 py-1 disabled:opacity-40 dark:border-gray-700"
-            >
-              السابق
-            </button>
-            <span className="px-2 py-1">
-              {page} / {pages}
-            </span>
-            <button
-              disabled={page >= pages}
-              onClick={() => setPage((p) => p + 1)}
-              className="rounded border border-gray-300 px-3 py-1 disabled:opacity-40 dark:border-gray-700"
-            >
-              التالي
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
+  const { can } = useAuth(); const canManage = can("support.manage");
+  const [tab, setTab] = useState<"tickets" | "complaints">("tickets"); const [tickets, setTickets] = useState<Ticket[]>([]); const [complaints, setComplaints] = useState<Complaint[]>([]); const [breaching, setBreaching] = useState<Ticket[]>([]); const [page, setPage] = useState(1); const [total, setTotal] = useState(0); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [busy, setBusy] = useState(""); const [notice, setNotice] = useState<{kind:"success"|"error";text:string;code?:string}|null>(null);
+  const load = useCallback(async (manual=false) => { manual?setRefreshing(true):setLoading(true); try { const [ticketRes, complaintRes, breachRes] = await Promise.all([api.get("/support/tickets", {params:{page,limit:20}}), api.get("/support/complaints", {params:{page,limit:20}}), api.get("/support/tickets/breaching")]); setTickets(ticketRes.data.items??[]); setComplaints(complaintRes.data.items??[]); setBreaching(breachRes.data??[]); setTotal(tab==="tickets"?(ticketRes.data.total??0):(complaintRes.data.total??0)); if(manual)setNotice({kind:"success",text:"تم التحديث."}); } catch(e) {setNotice({kind:"error",text:getApiErrorMessage(e,"تعذّر تحميل مركز الدعم"),code:getApiErrorCode(e)});} finally {setLoading(false);setRefreshing(false);} },[page,tab]);
+  useEffect(()=>{void load(); const t=window.setInterval(()=>void load(),30000); return()=>window.clearInterval(t);},[load]);
+  async function update(path:string, data:object, key:string, success:string) { if(!canManage||busy)return; setBusy(key); try {await api.patch(path,data);setNotice({kind:"success",text:success});void load();} catch(e){setNotice({kind:"error",text:getApiErrorMessage(e,"تعذّر تنفيذ الإجراء"),code:getApiErrorCode(e)});} finally{setBusy("");} }
+  const ticketColumns:Column<Ticket>[]=[{key:"subject",header:"التذكرة",render:t=><div><b>{t.subject}</b><div className="text-xs text-slate-500">{t.user?.name??"-"} · {t.category??"-"}</div></div>},{key:"priority",header:"SLA",render:t=><div><span className={t.breached?"font-bold text-red-600":"font-medium"}>{t.priority??"NORMAL"}</span><div className="text-xs text-slate-500">{t.slaDueAt?dateTime(t.slaDueAt):"لم يحدد"}</div></div>},{key:"status",header:"الحالة",render:t=><StatusBadge status={t.status}/>},{key:"escalation",header:"تصعيد",render:t=><span className={t.escalationLevel?"font-bold text-amber-600":""}>{t.escalationLevel??0}/3</span>},{key:"action",header:"إجراء",render:t=>canManage?<select disabled={busy===t.id} value={t.status} onChange={e=>void update(`/support/tickets/${t.id}/status`,{status:e.target.value},t.id,"تم تحديث التذكرة.")} className="rounded border px-2 py-1 text-xs dark:bg-gray-900">{TICKET_STATUSES.map(s=><option key={s}>{s}</option>)}</select>:<span className="text-xs text-slate-400">قراءة فقط</span>}];
+  const complaintColumns:Column<Complaint>[]=[{key:"message",header:"الشكوى",render:c=><div className="max-w-md truncate">{c.message}</div>},{key:"from",header:"المبلّغ",render:c=>c.fromUser?.name??"-"},{key:"against",header:"ضد",render:c=>c.againstUser?.name??"-"},{key:"status",header:"الحالة",render:c=><StatusBadge status={c.status}/>},{key:"createdAt",header:"التاريخ",render:c=>dateTime(c.createdAt)},{key:"action",header:"إجراء",render:c=>canManage?<select disabled={busy===c.id} value={c.status} onChange={e=>void update(`/support/complaints/${c.id}/status`,{status:e.target.value},c.id,"تم تحديث الشكوى.")} className="rounded border px-2 py-1 text-xs dark:bg-gray-900">{COMPLAINT_STATUSES.map(s=><option key={s}>{s}</option>)}</select>:null}];
+  return <><Topbar title="Support & SLA Intelligence"/><main className="space-y-5 p-4 sm:p-6"><section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-white p-5 dark:border-gray-800 dark:bg-gray-900"><div><p className="text-sm font-semibold text-amber-600">Stage 32 · Support & Safety</p><h1 className="mt-1 text-2xl font-bold">الدعم والشكاوى وSLA</h1><p className="mt-1 text-sm text-slate-500">تصعيد التذاكر المتجاوزة ومتابعة الشكاوى من مصدر Backend الحالي.</p></div><button onClick={()=>void load(true)} disabled={loading||refreshing} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{refreshing?<Loader2 size={16} className="animate-spin"/>:<RefreshCw size={16}/>}تحديث</button></section>{notice?<div className={`flex gap-2 rounded-xl border p-4 text-sm ${notice.kind==="success"?"border-emerald-200 bg-emerald-50 text-emerald-800":"border-red-200 bg-red-50 text-red-800"}`}>{notice.kind==="success"?<CheckCircle2 size={18}/>:<AlertTriangle size={18}/>}<div>{notice.text}{notice.code?<div className="font-mono text-xs">code: {notice.code}</div>:null}</div></div>:null}<section className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900/40 dark:bg-red-950/20"><div className="flex items-center gap-2 font-bold text-red-700 dark:text-red-300"><Clock3 size={18}/>تذاكر متجاوزة SLA: {num(breaching.length)}</div><div className="mt-2 flex flex-wrap gap-2">{breaching.slice(0,6).map(t=><span key={t.id} className="rounded-lg bg-white px-2 py-1 text-xs dark:bg-gray-900">{t.priority} · {t.subject}</span>)}{breaching.length===0?<span className="text-sm text-slate-500">لا توجد تذاكر متجاوزة.</span>:null}</div></section><div className="flex gap-2"><button onClick={()=>{setTab("tickets");setPage(1)}} className={tab==="tickets"?"rounded-lg bg-brand px-4 py-2 text-sm text-white":"rounded-lg border px-4 py-2 text-sm"}>التذاكر</button><button onClick={()=>{setTab("complaints");setPage(1)}} className={tab==="complaints"?"rounded-lg bg-brand px-4 py-2 text-sm text-white":"rounded-lg border px-4 py-2 text-sm"}>الشكاوى</button></div><DataTable columns={tab==="tickets"?ticketColumns:complaintColumns} rows={tab==="tickets"?tickets:complaints} loading={loading} empty="لا توجد نتائج"/><div className="flex justify-between text-sm text-slate-500"><span>الإجمالي {num(total)}</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(v=>v-1)}>السابق</button><button disabled={page*20>=total} onClick={()=>setPage(v=>v+1)}>التالي</button></div></div></main></>;
 }

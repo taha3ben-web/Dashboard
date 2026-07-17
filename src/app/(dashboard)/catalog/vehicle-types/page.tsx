@@ -30,7 +30,11 @@ import { StatusControl } from "@/components/catalog/StatusControl";
 import { AuditLog } from "@/components/catalog/AuditLog";
 import { DragList } from "@/components/catalog/DragList";
 import { I18nField } from "@/components/catalog/I18nField";
-import { IconField, IconPreview, IconValue } from "@/components/catalog/IconField";
+import {
+  IconField,
+  IconPreview,
+  IconValue,
+} from "@/components/catalog/IconField";
 import { Toggle } from "@/components/ui/Toggle";
 import { FormRow, Labeled, inputCls } from "@/components/catalog/CatalogForm";
 
@@ -41,7 +45,7 @@ const SORT_OPTIONS = [
   { value: "createdAt", label: "تاريخ الإنشاء" },
 ];
 
-type Tab = "basic" | "options" | "requirements";
+type Tab = "basic" | "options" | "requirements" | "targeting";
 
 interface FormState {
   id?: string;
@@ -59,6 +63,14 @@ interface FormState {
   requiresApproval: boolean;
   visibleToPassengers: boolean;
   visibleToDrivers: boolean;
+  appIdsText: string;
+  clientOsText: string;
+  countryCodesText: string;
+  audienceSegmentsText: string;
+  minAppVersion: string;
+  maxAppVersion: string;
+  badgeText: string;
+  etaMinutes: string;
   minVehicleYear: string;
   minDriverRating: string;
   minDriverTrips: string;
@@ -82,6 +94,14 @@ function emptyForm(categoryId = ""): FormState {
     requiresApproval: false,
     visibleToPassengers: true,
     visibleToDrivers: true,
+    appIdsText: "",
+    clientOsText: "",
+    countryCodesText: "",
+    audienceSegmentsText: "",
+    minAppVersion: "",
+    maxAppVersion: "",
+    badgeText: "",
+    etaMinutes: "",
     minVehicleYear: "",
     minDriverRating: "",
     minDriverTrips: "",
@@ -116,6 +136,14 @@ function toForm(t: VehicleType): FormState {
     requiresApproval: !!t.requiresApproval,
     visibleToPassengers: t.visibleToPassengers !== false,
     visibleToDrivers: t.visibleToDrivers !== false,
+    appIdsText: (t.appIds ?? []).join(", "),
+    clientOsText: (t.clientOs ?? []).join(", "),
+    countryCodesText: (t.countryCodes ?? []).join(", "),
+    audienceSegmentsText: (t.audienceSegments ?? []).join(", "),
+    minAppVersion: t.minAppVersion ?? "",
+    maxAppVersion: t.maxAppVersion ?? "",
+    badgeText: t.badgeText ?? "",
+    etaMinutes: t.etaMinutes != null ? String(t.etaMinutes) : "",
     minVehicleYear: t.minVehicleYear != null ? String(t.minVehicleYear) : "",
     minDriverRating: t.minDriverRating != null ? String(t.minDriverRating) : "",
     minDriverTrips: t.minDriverTrips != null ? String(t.minDriverTrips) : "",
@@ -127,6 +155,20 @@ function toForm(t: VehicleType): FormState {
 function numOrUndef(v: string): number | undefined {
   const n = Number(v);
   return v.trim() === "" || Number.isNaN(n) ? undefined : n;
+}
+
+function csv(text: string, casing: "upper" | "lower" = "lower") {
+  return Array.from(
+    new Set(
+      text
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value) =>
+          casing === "upper" ? value.toUpperCase() : value.toLowerCase(),
+        ),
+    ),
+  );
 }
 
 export default function VehicleTypesPage() {
@@ -143,7 +185,9 @@ export default function VehicleTypesPage() {
 
   useEffect(() => {
     api
-      .get("/vehicle-categories", { params: { limit: 100, sortBy: "sortOrder" } })
+      .get("/vehicle-categories", {
+        params: { limit: 100, sortBy: "sortOrder" },
+      })
       .then((r) => setCategories(r.data.data ?? []))
       .catch(() => setCategories([]));
   }, []);
@@ -185,6 +229,14 @@ export default function VehicleTypesPage() {
       requiresApproval: form.requiresApproval,
       visibleToPassengers: form.visibleToPassengers,
       visibleToDrivers: form.visibleToDrivers,
+      appIds: csv(form.appIdsText, "lower"),
+      clientOs: csv(form.clientOsText, "lower"),
+      countryCodes: csv(form.countryCodesText, "upper"),
+      audienceSegments: csv(form.audienceSegmentsText, "lower"),
+      minAppVersion: form.minAppVersion.trim() || undefined,
+      maxAppVersion: form.maxAppVersion.trim() || undefined,
+      badgeText: form.badgeText.trim() || undefined,
+      etaMinutes: numOrUndef(form.etaMinutes),
       minVehicleYear: numOrUndef(form.minVehicleYear),
       minDriverRating: numOrUndef(form.minDriverRating),
       minDriverTrips: numOrUndef(form.minDriverTrips),
@@ -231,7 +283,9 @@ export default function VehicleTypesPage() {
   const openCreate = () => {
     setSaveErr("");
     setTab("basic");
-    setForm(emptyForm(typeof query.categoryId === "string" ? query.categoryId : ""));
+    setForm(
+      emptyForm(typeof query.categoryId === "string" ? query.categoryId : ""),
+    );
   };
   const openEdit = (t: VehicleType) => {
     setSaveErr("");
@@ -245,7 +299,8 @@ export default function VehicleTypesPage() {
       <div className="p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-gray-500">
-            أنواع المركبات داخل كل فئة. افتح التفاصيل لإدارة الحقول والميزات والتسعير.
+            أنواع المركبات داخل كل فئة. افتح التفاصيل لإدارة الحقول والميزات
+            والتسعير.
           </p>
           <div className="flex gap-2">
             <button
@@ -267,7 +322,9 @@ export default function VehicleTypesPage() {
         <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
           {reorderMode ? (
             <div className="p-4">
-              <p className="mb-3 text-xs text-gray-400">اسحب الأنواع لتغيير ترتيبها.</p>
+              <p className="mb-3 text-xs text-gray-400">
+                اسحب الأنواع لتغيير ترتيبها.
+              </p>
               <DragList
                 items={data}
                 onReorder={reorder}
@@ -275,7 +332,9 @@ export default function VehicleTypesPage() {
                   <div className="flex items-center gap-3">
                     <IconPreview value={t} size={32} />
                     <span className="font-medium">{localized(t)}</span>
-                    <span className="text-xs text-gray-400">{catName(t.categoryId)}</span>
+                    <span className="text-xs text-gray-400">
+                      {catName(t.categoryId)}
+                    </span>
                   </div>
                 )}
               />
@@ -287,7 +346,9 @@ export default function VehicleTypesPage() {
                 onSearch={(v) => setQuery({ search: v })}
                 sortBy={query.sortBy}
                 sortOrder={query.sortOrder}
-                onSort={(by, order) => setQuery({ sortBy: by, sortOrder: order })}
+                onSort={(by, order) =>
+                  setQuery({ sortBy: by, sortOrder: order })
+                }
                 sortOptions={SORT_OPTIONS}
                 status={query.status}
                 onStatus={(v) => setQuery({ status: v })}
@@ -298,7 +359,11 @@ export default function VehicleTypesPage() {
                 onReload={reload}
                 extra={
                   <select
-                    value={typeof query.categoryId === "string" ? query.categoryId : ""}
+                    value={
+                      typeof query.categoryId === "string"
+                        ? query.categoryId
+                        : ""
+                    }
                     onChange={(e) => setQuery({ categoryId: e.target.value })}
                     className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                   >
@@ -326,13 +391,19 @@ export default function VehicleTypesPage() {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={6} className="py-10 text-center text-gray-400">
+                        <td
+                          colSpan={6}
+                          className="py-10 text-center text-gray-400"
+                        >
                           جارٍ التحميل...
                         </td>
                       </tr>
                     ) : data.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-10 text-center text-gray-400">
+                        <td
+                          colSpan={6}
+                          className="py-10 text-center text-gray-400"
+                        >
                           لا توجد أنواع.
                         </td>
                       </tr>
@@ -346,7 +417,9 @@ export default function VehicleTypesPage() {
                             <div className="flex items-center gap-3">
                               <IconPreview value={t} size={34} />
                               <div>
-                                <div className="font-medium">{localized(t)}</div>
+                                <div className="font-medium">
+                                  {localized(t)}
+                                </div>
                                 <div className="text-[11px] text-gray-400">
                                   {t.capacity ? `${t.capacity} مقاعد` : ""}
                                   {t.deletedAt ? " · مؤرشف" : ""}
@@ -354,15 +427,24 @@ export default function VehicleTypesPage() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-gray-500">{catName(t.categoryId)}</td>
-                          <td className="px-4 py-3 text-gray-500">×{t.multiplier ?? 1}</td>
+                          <td className="px-4 py-3 text-gray-500">
+                            {catName(t.categoryId)}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">
+                            ×{t.multiplier ?? 1}
+                          </td>
                           <td className="px-4 py-3">
-                            <StatusControl status={t.status} onChange={(s) => setStatus(t, s)} />
+                            <StatusControl
+                              status={t.status}
+                              onChange={(s) => setStatus(t, s)}
+                            />
                           </td>
                           <td className="px-4 py-3">
                             <button
                               onClick={() => toggleActive(t)}
-                              className={t.isActive ? "text-green-600" : "text-gray-400"}
+                              className={
+                                t.isActive ? "text-green-600" : "text-gray-400"
+                              }
                             >
                               {t.isActive ? "مفعّل" : "موقوف"}
                             </button>
@@ -376,7 +458,11 @@ export default function VehicleTypesPage() {
                               >
                                 <Settings2 size={16} />
                               </Link>
-                              <button title="تعديل" onClick={() => openEdit(t)} className="hover:text-brand">
+                              <button
+                                title="تعديل"
+                                onClick={() => openEdit(t)}
+                                className="hover:text-brand"
+                              >
                                 <Edit3 size={16} />
                               </button>
                               <button
@@ -450,11 +536,14 @@ export default function VehicleTypesPage() {
         {form ? (
           <div>
             <div className="mb-4 flex gap-1 border-b border-gray-200 dark:border-gray-800">
-              {([
-                ["basic", "أساسي"],
-                ["options", "الخيارات"],
-                ["requirements", "المتطلبات"],
-              ] as [Tab, string][]).map(([t, l]) => (
+              {(
+                [
+                  ["basic", "أساسي"],
+                  ["options", "الخيارات"],
+                  ["requirements", "المتطلبات"],
+                  ["targeting", "الاستهداف"],
+                ] as [Tab, string][]
+              ).map(([t, l]) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -474,7 +563,9 @@ export default function VehicleTypesPage() {
                 <Labeled label="الفئة">
                   <select
                     value={form.categoryId}
-                    onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, categoryId: e.target.value })
+                    }
                     className={inputCls}
                   >
                     <option value="">بدون فئة</option>
@@ -501,7 +592,9 @@ export default function VehicleTypesPage() {
                   <Labeled label="غرض الاستخدام">
                     <select
                       value={form.usageType}
-                      onChange={(e) => setForm({ ...form, usageType: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, usageType: e.target.value })
+                      }
                       className={inputCls}
                     >
                       {USAGE_TYPES.map((u) => (
@@ -514,7 +607,9 @@ export default function VehicleTypesPage() {
                   <Labeled label="معامل السعر (multiplier)">
                     <input
                       value={form.multiplier}
-                      onChange={(e) => setForm({ ...form, multiplier: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, multiplier: e.target.value })
+                      }
                       className={inputCls}
                       dir="ltr"
                       inputMode="decimal"
@@ -525,7 +620,9 @@ export default function VehicleTypesPage() {
                   <Labeled label="عدد المقاعد">
                     <input
                       value={form.capacity}
-                      onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, capacity: e.target.value })
+                      }
                       className={inputCls}
                       dir="ltr"
                       inputMode="numeric"
@@ -534,7 +631,9 @@ export default function VehicleTypesPage() {
                   <Labeled label="الأمتعة">
                     <input
                       value={form.luggage}
-                      onChange={(e) => setForm({ ...form, luggage: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, luggage: e.target.value })
+                      }
                       className={inputCls}
                       dir="ltr"
                       inputMode="numeric"
@@ -542,8 +641,13 @@ export default function VehicleTypesPage() {
                   </Labeled>
                 </FormRow>
                 <div>
-                  <span className="mb-2 block text-sm font-medium">الأيقونة والصورة</span>
-                  <IconField value={form.icon} onChange={(v) => setForm({ ...form, icon: v })} />
+                  <span className="mb-2 block text-sm font-medium">
+                    الأيقونة والصورة
+                  </span>
+                  <IconField
+                    value={form.icon}
+                    onChange={(v) => setForm({ ...form, icon: v })}
+                  />
                 </div>
               </div>
             ) : null}
@@ -592,7 +696,9 @@ export default function VehicleTypesPage() {
                   <Labeled label="أقدم سنة صنع مسموحة">
                     <input
                       value={form.minVehicleYear}
-                      onChange={(e) => setForm({ ...form, minVehicleYear: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, minVehicleYear: e.target.value })
+                      }
                       className={inputCls}
                       dir="ltr"
                       inputMode="numeric"
@@ -601,7 +707,9 @@ export default function VehicleTypesPage() {
                   <Labeled label="أدنى عدد رحلات للسائق">
                     <input
                       value={form.minDriverTrips}
-                      onChange={(e) => setForm({ ...form, minDriverTrips: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, minDriverTrips: e.target.value })
+                      }
                       className={inputCls}
                       dir="ltr"
                       inputMode="numeric"
@@ -612,7 +720,9 @@ export default function VehicleTypesPage() {
                   <Labeled label="أدنى تقييم للسائق">
                     <input
                       value={form.minDriverRating}
-                      onChange={(e) => setForm({ ...form, minDriverRating: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, minDriverRating: e.target.value })
+                      }
                       className={inputCls}
                       dir="ltr"
                       inputMode="decimal"
@@ -621,7 +731,12 @@ export default function VehicleTypesPage() {
                   <Labeled label="نوع الرخصة المطلوبة">
                     <input
                       value={form.requiredLicenseType}
-                      onChange={(e) => setForm({ ...form, requiredLicenseType: e.target.value })}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          requiredLicenseType: e.target.value,
+                        })
+                      }
                       className={inputCls}
                     />
                   </Labeled>
@@ -632,7 +747,9 @@ export default function VehicleTypesPage() {
                 >
                   <input
                     value={form.requiredDocuments}
-                    onChange={(e) => setForm({ ...form, requiredDocuments: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, requiredDocuments: e.target.value })
+                    }
                     className={inputCls}
                     dir="ltr"
                   />
@@ -640,7 +757,117 @@ export default function VehicleTypesPage() {
               </div>
             ) : null}
 
-            {saveErr ? <p className="mt-4 text-sm text-red-500">{saveErr}</p> : null}
+            {tab === "targeting" ? (
+              <div className="space-y-4">
+                <p className="text-xs text-gray-400">
+                  تحكم في ظهور النوع حسب التطبيق والنظام والسوق والإصدار
+                  والشرائح.
+                </p>
+                <FormRow>
+                  <Labeled label="appIds">
+                    <input
+                      value={form.appIdsText}
+                      onChange={(e) =>
+                        setForm({ ...form, appIdsText: e.target.value })
+                      }
+                      className={inputCls}
+                      dir="ltr"
+                      placeholder="nova-passenger, nova-driver"
+                    />
+                  </Labeled>
+                  <Labeled label="أنظمة التشغيل">
+                    <input
+                      value={form.clientOsText}
+                      onChange={(e) =>
+                        setForm({ ...form, clientOsText: e.target.value })
+                      }
+                      className={inputCls}
+                      dir="ltr"
+                      placeholder="android, ios"
+                    />
+                  </Labeled>
+                </FormRow>
+                <FormRow>
+                  <Labeled label="الدول / الأسواق">
+                    <input
+                      value={form.countryCodesText}
+                      onChange={(e) =>
+                        setForm({ ...form, countryCodesText: e.target.value })
+                      }
+                      className={inputCls}
+                      dir="ltr"
+                      placeholder="DZ, SA, AE"
+                    />
+                  </Labeled>
+                  <Labeled label="الشرائح">
+                    <input
+                      value={form.audienceSegmentsText}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          audienceSegmentsText: e.target.value,
+                        })
+                      }
+                      className={inputCls}
+                      dir="ltr"
+                      placeholder="vip, beta, airport"
+                    />
+                  </Labeled>
+                </FormRow>
+                <FormRow>
+                  <Labeled label="أقل إصدار تطبيق">
+                    <input
+                      value={form.minAppVersion}
+                      onChange={(e) =>
+                        setForm({ ...form, minAppVersion: e.target.value })
+                      }
+                      className={inputCls}
+                      dir="ltr"
+                      placeholder="1.8.0"
+                    />
+                  </Labeled>
+                  <Labeled label="أعلى إصدار تطبيق">
+                    <input
+                      value={form.maxAppVersion}
+                      onChange={(e) =>
+                        setForm({ ...form, maxAppVersion: e.target.value })
+                      }
+                      className={inputCls}
+                      dir="ltr"
+                      placeholder="2.5.0"
+                    />
+                  </Labeled>
+                </FormRow>
+                <FormRow>
+                  <Labeled label="شارة الواجهة">
+                    <input
+                      value={form.badgeText}
+                      onChange={(e) =>
+                        setForm({ ...form, badgeText: e.target.value })
+                      }
+                      className={inputCls}
+                      placeholder="الأكثر طلبًا"
+                    />
+                  </Labeled>
+                  <Labeled label="ETA بالدقائق">
+                    <input
+                      value={form.etaMinutes}
+                      onChange={(e) =>
+                        setForm({ ...form, etaMinutes: e.target.value })
+                      }
+                      className={inputCls}
+                      dir="ltr"
+                      inputMode="numeric"
+                      placeholder="6"
+                    />
+                  </Labeled>
+                </FormRow>
+              </div>
+            ) : null}
+
+            {saveErr ? (
+              <p className="mt-4 text-sm text-red-500">{saveErr}</p>
+            ) : null}
           </div>
         ) : null}
       </Modal>
@@ -675,7 +902,9 @@ export default function VehicleTypesPage() {
         onClose={() => setAuditFor(null)}
         title={`سجل التعديلات — ${auditFor ? localized(auditFor) : ""}`}
       >
-        {auditFor ? <AuditLog entity="VehicleType" entityId={auditFor.id} /> : null}
+        {auditFor ? (
+          <AuditLog entity="VehicleType" entityId={auditFor.id} />
+        ) : null}
       </Modal>
     </div>
   );

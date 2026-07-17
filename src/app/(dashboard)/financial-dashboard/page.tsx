@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Topbar } from "@/components/Topbar";
 import { StatCard } from "@/components/StatCard";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { money, num } from "@/lib/format";
 import { canAccessPath } from "@/lib/permissions";
 import { useAuth } from "@/providers/AuthProvider";
@@ -82,16 +82,31 @@ interface FinancialHealth {
   userLiabilities: number;
 }
 
+interface ReconciliationSummary {
+  unsettledTrips: number;
+  missingPayments: number;
+  missingDriverEarnings: number;
+  missingCompanyEarnings: number;
+  paymentLedgerMismatch: number;
+  withdrawalLedgerMismatch: number;
+  fundingLedgerMismatch: number;
+  transferLedgerMismatch: number;
+}
+
 export default function FinancialDashboardPage() {
   const { permissions } = useAuth();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [revenue, setRevenue] = useState<Revenue | null>(null);
   const [paymentOps, setPaymentOps] = useState<PaymentOps | null>(null);
-  const [withdrawalOps, setWithdrawalOps] = useState<WithdrawalOps | null>(null);
+  const [withdrawalOps, setWithdrawalOps] = useState<WithdrawalOps | null>(
+    null,
+  );
   const [fundingOps, setFundingOps] = useState<FundingOps | null>(null);
   const [transferOps, setTransferOps] = useState<TransferOps | null>(null);
   const [health, setHealth] = useState<FinancialHealth | null>(null);
+  const [reconciliation, setReconciliation] =
+    useState<ReconciliationSummary | null>(null);
   const [error, setError] = useState("");
 
   const quickLinks = [
@@ -122,6 +137,7 @@ export default function FinancialDashboardPage() {
       api.get("/statistics/funding-ops", { params }),
       api.get("/statistics/transfer-ops", { params }),
       api.get("/statistics/financial-health", { params }),
+      api.get("/financial/reconciliation/summary", { params }),
     ])
       .then(
         ([
@@ -131,6 +147,7 @@ export default function FinancialDashboardPage() {
           fundingOpsResponse,
           transferOpsResponse,
           healthResponse,
+          reconciliationResponse,
         ]) => {
           setRevenue(revenueResponse.data ?? null);
           setPaymentOps(paymentOpsResponse.data ?? null);
@@ -138,6 +155,7 @@ export default function FinancialDashboardPage() {
           setFundingOps(fundingOpsResponse.data ?? null);
           setTransferOps(transferOpsResponse.data ?? null);
           setHealth(healthResponse.data ?? null);
+          setReconciliation(reconciliationResponse.data ?? null);
         },
       )
       .catch((loadError) => {
@@ -147,11 +165,17 @@ export default function FinancialDashboardPage() {
         setFundingOps(null);
         setTransferOps(null);
         setHealth(null);
-        setError(
-          loadError instanceof Error ? loadError.message : "تعذّر تحميل لوحة المالية",
-        );
+        setReconciliation(null);
+        setError(getApiErrorMessage(loadError, "تعذّر تحميل لوحة المالية"));
       });
   }, [params]);
+
+  const ledgerMismatch = reconciliation
+    ? reconciliation.paymentLedgerMismatch +
+      reconciliation.withdrawalLedgerMismatch +
+      reconciliation.fundingLedgerMismatch +
+      reconciliation.transferLedgerMismatch
+    : 0;
 
   useEffect(() => {
     void load();
@@ -200,48 +224,135 @@ export default function FinancialDashboardPage() {
         {error ? <div className="text-sm text-red-500">{error}</div> : null}
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="إيراد الشركة" value={money(revenue?.companyEarnings)} icon={<Landmark size={18} />} accent="brand" />
-          <StatCard label="المدفوعات المحصلة" value={money(revenue?.paymentsCollected)} icon={<CreditCard size={18} />} accent="green" />
-          <StatCard label="صافي السائقين" value={money(revenue?.driverNet)} icon={<Wallet size={18} />} accent="blue" />
-          <StatCard label="السحوبات المدفوعة" value={money(revenue?.withdrawalsPaid)} icon={<Briefcase size={18} />} accent="amber" />
-          <StatCard label="رصيد المنصة النقدي" value={money(health?.platformCash)} icon={<Landmark size={18} />} />
-          <StatCard label="احتياطي السحوبات" value={money(health?.withdrawalReserve)} icon={<Wallet size={18} />} accent="amber" />
-          <StatCard label="مستحقات البطاقات" value={money(health?.cardReceivable)} icon={<CreditCard size={18} />} accent="blue" />
-          <StatCard label="التزامات المحافظ" value={money(health?.userLiabilities)} icon={<Briefcase size={18} />} accent="red" />
+          <StatCard
+            label="إيراد الشركة"
+            value={money(revenue?.companyEarnings)}
+            icon={<Landmark size={18} />}
+            accent="brand"
+          />
+          <StatCard
+            label="المدفوعات المحصلة"
+            value={money(revenue?.paymentsCollected)}
+            icon={<CreditCard size={18} />}
+            accent="green"
+          />
+          <StatCard
+            label="صافي السائقين"
+            value={money(revenue?.driverNet)}
+            icon={<Wallet size={18} />}
+            accent="blue"
+          />
+          <StatCard
+            label="السحوبات المدفوعة"
+            value={money(revenue?.withdrawalsPaid)}
+            icon={<Briefcase size={18} />}
+            accent="amber"
+          />
+          <StatCard
+            label="رصيد المنصة النقدي"
+            value={money(health?.platformCash)}
+            icon={<Landmark size={18} />}
+          />
+          <StatCard
+            label="احتياطي السحوبات"
+            value={money(health?.withdrawalReserve)}
+            icon={<Wallet size={18} />}
+            accent="amber"
+          />
+          <StatCard
+            label="مستحقات البطاقات"
+            value={money(health?.cardReceivable)}
+            icon={<CreditCard size={18} />}
+            accent="blue"
+          />
+          <StatCard
+            label="التزامات المستخدمين"
+            value={money(health?.userLiabilities)}
+            icon={<Briefcase size={18} />}
+            accent="red"
+          />
+          <StatCard
+            label="رحلات غير مسوّاة"
+            value={num(reconciliation?.unsettledTrips)}
+            icon={<ShieldAlert size={18} />}
+            accent={reconciliation?.unsettledTrips ? "amber" : "green"}
+          />
+          <StatCard
+            label="فجوات Ledger"
+            value={num(ledgerMismatch)}
+            icon={<ShieldAlert size={18} />}
+            accent={ledgerMismatch ? "red" : "green"}
+          />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-3">
           <Panel title="عمليات الدفع">
-            <MiniStat label="إجمالي العمليات" value={num(paymentOps?.totalCount)} />
-            <MiniStat label="القيمة الكلية" value={money(paymentOps?.totalAmount)} />
-            <MiniStat label="المحصلة" value={money(paymentOps?.capturedAmount)} />
+            <MiniStat
+              label="إجمالي العمليات"
+              value={num(paymentOps?.totalCount)}
+            />
+            <MiniStat
+              label="القيمة الكلية"
+              value={money(paymentOps?.totalAmount)}
+            />
+            <MiniStat
+              label="المحصلة"
+              value={money(paymentOps?.capturedAmount)}
+            />
             <MiniStat label="المعلّقة" value={num(paymentOps?.pendingCount)} />
             <MiniStat label="الفاشلة" value={num(paymentOps?.failedCount)} />
             <MiniStat label="المستردة" value={num(paymentOps?.refundedCount)} />
           </Panel>
 
           <Panel title="شحن السائقين">
-            <MiniStat label="إجمالي الطلبات" value={num(fundingOps?.totalCount)} />
-            <MiniStat label="القيمة الكلية" value={money(fundingOps?.totalAmount)} />
-            <MiniStat label="قيد الانتظار" value={num(fundingOps?.pendingCount)} />
+            <MiniStat
+              label="إجمالي الطلبات"
+              value={num(fundingOps?.totalCount)}
+            />
+            <MiniStat
+              label="القيمة الكلية"
+              value={money(fundingOps?.totalAmount)}
+            />
+            <MiniStat
+              label="قيد الانتظار"
+              value={num(fundingOps?.pendingCount)}
+            />
             <MiniStat label="معتمدة" value={num(fundingOps?.approvedCount)} />
             <MiniStat label="تم شحنها" value={num(fundingOps?.fundedCount)} />
-            <MiniStat label="قيمة الشحن المنفذة" value={money(fundingOps?.fundedAmount)} />
+            <MiniStat
+              label="قيمة الشحن المنفذة"
+              value={money(fundingOps?.fundedAmount)}
+            />
           </Panel>
 
           <Panel title="تحويلات السائقين">
-            <MiniStat label="إجمالي الطلبات" value={num(transferOps?.totalCount)} />
-            <MiniStat label="القيمة الكلية" value={money(transferOps?.totalAmount)} />
-            <MiniStat label="قيد الانتظار" value={num(transferOps?.pendingCount)} />
+            <MiniStat
+              label="إجمالي الطلبات"
+              value={num(transferOps?.totalCount)}
+            />
+            <MiniStat
+              label="القيمة الكلية"
+              value={money(transferOps?.totalAmount)}
+            />
+            <MiniStat
+              label="قيد الانتظار"
+              value={num(transferOps?.pendingCount)}
+            />
             <MiniStat label="معتمدة" value={num(transferOps?.approvedCount)} />
             <MiniStat label="مكتملة" value={num(transferOps?.completedCount)} />
-            <MiniStat label="عليها رايات مخاطر" value={num(transferOps?.flaggedCount)} />
+            <MiniStat
+              label="عليها رايات مخاطر"
+              value={num(transferOps?.flaggedCount)}
+            />
           </Panel>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
           <Panel title="السيولة وصحة الدفتر">
-            <MiniStat label="إجمالي الحركات" value={num(health?.totalTransactions)} />
+            <MiniStat
+              label="إجمالي الحركات"
+              value={num(health?.totalTransactions)}
+            />
             <MiniStat label="POSTED" value={num(health?.postedCount)} />
             <MiniStat label="PENDING" value={num(health?.pendingCount)} />
             <MiniStat label="FAILED" value={num(health?.failedCount)} />
@@ -252,21 +363,45 @@ export default function FinancialDashboardPage() {
           <Panel title="توزيع المراجع المالية">
             <MiniStat label="TRIP" value={num(health?.tripReferences)} />
             <MiniStat label="PAYMENT" value={num(health?.paymentReferences)} />
-            <MiniStat label="WITHDRAWAL" value={num(health?.withdrawalReferences)} />
-            <MiniStat label="DRIVER_FUNDING" value={num(health?.fundingReferences)} />
-            <MiniStat label="DRIVER_TRANSFER" value={num(health?.transferReferences)} />
+            <MiniStat
+              label="WITHDRAWAL"
+              value={num(health?.withdrawalReferences)}
+            />
+            <MiniStat
+              label="DRIVER_FUNDING"
+              value={num(health?.fundingReferences)}
+            />
+            <MiniStat
+              label="DRIVER_TRANSFER"
+              value={num(health?.transferReferences)}
+            />
             <MiniStat label="العمولات" value={money(revenue?.commissions)} />
           </Panel>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
           <Panel title="تشغيل السحوبات">
-            <MiniStat label="إجمالي الطلبات" value={num(withdrawalOps?.totalCount)} />
-            <MiniStat label="إجمالي القيمة" value={money(withdrawalOps?.totalAmount)} />
-            <MiniStat label="قيد الانتظار" value={num(withdrawalOps?.pendingCount)} />
-            <MiniStat label="معتمدة" value={num(withdrawalOps?.approvedCount)} />
+            <MiniStat
+              label="إجمالي الطلبات"
+              value={num(withdrawalOps?.totalCount)}
+            />
+            <MiniStat
+              label="إجمالي القيمة"
+              value={money(withdrawalOps?.totalAmount)}
+            />
+            <MiniStat
+              label="قيد الانتظار"
+              value={num(withdrawalOps?.pendingCount)}
+            />
+            <MiniStat
+              label="معتمدة"
+              value={num(withdrawalOps?.approvedCount)}
+            />
             <MiniStat label="مدفوعة" value={num(withdrawalOps?.paidCount)} />
-            <MiniStat label="مرفوضة" value={num(withdrawalOps?.rejectedCount)} />
+            <MiniStat
+              label="مرفوضة"
+              value={num(withdrawalOps?.rejectedCount)}
+            />
           </Panel>
 
           <Panel title="روابط تشغيل سريعة">
@@ -280,7 +415,13 @@ export default function FinancialDashboardPage() {
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       <h2 className="mb-4 text-lg font-semibold">{title}</h2>

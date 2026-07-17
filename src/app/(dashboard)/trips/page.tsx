@@ -15,6 +15,9 @@ interface Trip {
   id: string;
   status: string;
   fare?: number;
+  cancellationFee?: number | null;
+  cancellationSettledAt?: string | null;
+  cancelledBy?: string | null;
   distanceKm?: number;
   createdAt: string;
   completedAt?: string | null;
@@ -137,6 +140,14 @@ export default function TripsPage() {
     },
     { key: "fare", header: "التكلفة", render: (t) => money(t.fare) },
     {
+      key: "cancellationFee",
+      header: "غرامة إلغاء السائق",
+      render: (t) =>
+        t.cancelledBy === "DRIVER" && t.cancellationFee
+          ? `${money(t.cancellationFee)} ${t.cancellationSettledAt ? "(محسومة)" : "(قيد الحسم)"}`
+          : "-",
+    },
+    {
       key: "status",
       header: "الحالة",
       render: (t) => <StatusBadge status={t.status} />,
@@ -204,6 +215,27 @@ export default function TripsPage() {
             هذا الدور يطالع الرحلات فقط. أوامر إلغاء الرحلة وإعادة التسوية متاحة فقط لمن لديهم صلاحية إدارة الرحلات.
           </div>
         ) : null}
+
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-400">
+          يتحكّم السائق في دورة حياة الرحلة من التطبيق (وصل / بدء / إتمام /
+          إلغاء) عبر واجهة REST مخصّصة، مع تسوية مالية تلقائية عند الإتمام
+          وإشعارات Push فورية للراكب عند كل انتقال. تعكس هذه الصفحة الحالات
+          الناتجة مباشرةً.
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-400">
+          يُسجَّل مسار السائق الحيّ (GPS) في قاعدة البيانات بشكل مُقنَّن أثناء
+          الرحلات النشطة، ويُبثّ لحظيًّا إلى الراكب وإلى الخريطة الحية للمدير.
+          يمكن استرجاع المسار الكامل لكل رحلة عند الحاجة.
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-400">
+          لا توجد أي رسوم إلغاء على الراكب. عند إلغاء السائق للرحلة
+          تُحسم تلقائيًا غرامة من محفظة السائق = نسبة % من قيمة الرحلة الملغاة،
+          والنسبة قابلة للضبط من لوحة التحكم عبر مفتاح الإعدادات
+          trips.driverCancellationPenaltyPct (0 = معطّلة). تُسجّل الغرامة عبر دفتر
+          الأستاذ (قيد مزدوج متوازن) مع حدث تدقيق.
+        </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="إجمالي المعروض" value={num(total)} icon={<Route size={18} />} />

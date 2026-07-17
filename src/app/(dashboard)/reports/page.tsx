@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import { Topbar } from "@/components/Topbar";
 import { StatCard } from "@/components/StatCard";
-import { api } from "@/lib/api";
+import { GrowthTrendCharts } from "@/components/GrowthTrendCharts";
+import { api, getApiErrorCode, getApiErrorMessage } from "@/lib/api";
 import { dateTime, money, num } from "@/lib/format";
 
 interface Overview {
@@ -92,6 +93,9 @@ export default function ReportsPage() {
   const [topDrivers, setTopDrivers] = useState<TopDriver[]>([]);
   const [topCities, setTopCities] = useState<TopCity[]>([]);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState<string | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const params = useMemo(() => {
     const next: Record<string, string> = {};
@@ -100,9 +104,21 @@ export default function ReportsPage() {
     return next;
   }, [from, to]);
 
-  const load = useCallback(() => {
+  const load = useCallback(async (manual = false) => {
     setError("");
-    Promise.all([
+    setErrorCode(undefined);
+    manual ? setRefreshing(true) : setLoading(true);
+    try {
+      const [
+        overviewResponse,
+        revenueResponse,
+        paymentOpsResponse,
+        settlementOpsResponse,
+        withdrawalOpsResponse,
+        timeseriesResponse,
+        topDriversResponse,
+        topCitiesResponse,
+      ] = await Promise.all([
       api.get("/statistics/overview", { params }),
       api.get("/statistics/revenue", { params }),
       api.get("/statistics/payment-ops", { params }),
@@ -111,44 +127,42 @@ export default function ReportsPage() {
       api.get("/statistics/timeseries", { params }),
       api.get("/statistics/top-drivers", { params }),
       api.get("/statistics/top-cities", { params }),
-    ])
-      .then(
-        ([
-          overviewResponse,
-          revenueResponse,
-          paymentOpsResponse,
-          settlementOpsResponse,
-          withdrawalOpsResponse,
-          timeseriesResponse,
-          topDriversResponse,
-          topCitiesResponse,
-        ]) => {
-          setOverview(overviewResponse.data ?? null);
-          setRevenue(revenueResponse.data ?? null);
-          setPaymentOps(paymentOpsResponse.data ?? null);
-          setSettlementOps(settlementOpsResponse.data ?? null);
-          setWithdrawalOps(withdrawalOpsResponse.data ?? null);
-          setTimeseries(timeseriesResponse.data ?? []);
-          setTopDrivers(topDriversResponse.data ?? []);
-          setTopCities(topCitiesResponse.data ?? []);
-        },
-      )
-      .catch((loadError) => {
-        setOverview(null);
-        setRevenue(null);
-        setPaymentOps(null);
-        setSettlementOps(null);
-        setWithdrawalOps(null);
-        setTimeseries([]);
-        setTopDrivers([]);
-        setTopCities([]);
-        setError(loadError instanceof Error ? loadError.message : "تعذّر تحميل التقارير");
-      });
+      ]);
+      setOverview(overviewResponse.data ?? null);
+      setRevenue(revenueResponse.data ?? null);
+      setPaymentOps(paymentOpsResponse.data ?? null);
+      setSettlementOps(settlementOpsResponse.data ?? null);
+      setWithdrawalOps(withdrawalOpsResponse.data ?? null);
+      setTimeseries(timeseriesResponse.data ?? []);
+      setTopDrivers(topDriversResponse.data ?? []);
+      setTopCities(topCitiesResponse.data ?? []);
+    } catch (loadError) {
+      setOverview(null);
+      setRevenue(null);
+      setPaymentOps(null);
+      setSettlementOps(null);
+      setWithdrawalOps(null);
+      setTimeseries([]);
+      setTopDrivers([]);
+      setTopCities([]);
+      setError(getApiErrorMessage(loadError, "تعذّر تحميل التقارير"));
+      setErrorCode(getApiErrorCode(loadError));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [params]);
 
   useEffect(() => {
     void load();
+    const timer = window.setInterval(() => void load(), 60_000);
+    return () => window.clearInterval(timer);
   }, [load]);
+
+  const chartData = useMemo(
+    () => timeseries.map((row) => ({ label: new Intl.DateTimeFormat("ar-DZ", { month: "short", day: "numeric" }).format(new Date(row.day)), trips: row.trips, revenue: row.revenue })),
+    [timeseries],
+  );
 
   return (
     <>
@@ -174,10 +188,11 @@ export default function ReportsPage() {
             />
           </div>
           <button
-            onClick={() => void load()}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
+            onClick={() => void load(true)}
+            disabled={loading || refreshing}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            تطبيق
+            {refreshing ? "جارٍ التحديث..." : "تطبيق وتحديث"}
           </button>
           <button
             onClick={() => {
@@ -190,7 +205,8 @@ export default function ReportsPage() {
           </button>
         </section>
 
-        {error ? <div className="text-sm text-red-500">{error}</div> : null}
+        {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300"><div>{error}</div>{errorCode ? <div className="mt-1 font-mono text-xs">code: {errorCode}</div> : null}</div> : null}
+        {loading ? <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500 dark:border-gray-800 dark:bg-gray-900">جارٍ تحميل مؤشرات النمو والتحليلات...</div> : null}
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">نظرة عامة تشغيلية</h2>
@@ -241,6 +257,11 @@ export default function ReportsPage() {
             <MiniStat label="مدفوعة" value={num(withdrawalOps?.paidCount)} />
             <MiniStat label="مرفوضة" value={num(withdrawalOps?.rejectedCount)} />
           </Panel>
+        </section>
+
+        <section className="space-y-3">
+          <div><h2 className="text-lg font-semibold">اتجاه النمو اليومي</h2><p className="text-sm text-gray-500">إيراد المنصة معتمد من قيود Ledger المكتملة، والرحلات محسوبة حسب تاريخ إنشائها.</p></div>
+          <GrowthTrendCharts data={chartData} />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">

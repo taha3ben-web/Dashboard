@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { money, num, dateTime } from "@/lib/format";
 import { ArrowRight, Star, Car, Wallet as WalletIcon, FileText, MapPin } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
+import { ImageLightbox } from "@/components/ui/ImageLightbox";
 
 interface WalletTx {
   id: string;
@@ -107,6 +108,10 @@ export default function DriverDetailPage() {
   // الرسالة التي يتحكم بها الطاقم وتظهر للسائق في التطبيق مع قرار الحالة.
   const [statusMsg, setStatusMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  // معاينة صور الوثائق داخل مودال بدل فتح صفحة/تبويب جديد.
+  const [preview, setPreview] = useState<{ url: string; title: string } | null>(
+    null,
+  );
   const canManageDrivers = can("drivers.manage");
   const canReviewDocs = can("drivers.documents", "drivers.manage");
 
@@ -372,13 +377,22 @@ export default function DriverDetailPage() {
                   className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800"
                 >
 
-                  <a href={doc.url} target="_blank" rel="noreferrer">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreview({
+                        url: doc.url,
+                        title: DOC_LABELS[doc.type] ?? doc.type,
+                      })
+                    }
+                    className="block w-full cursor-zoom-in"
+                  >
                     <img
                       src={doc.url}
                       alt={doc.type}
                       className="h-40 w-full bg-gray-100 object-cover dark:bg-gray-800"
                     />
-                  </a>
+                  </button>
                   <div className="space-y-2 p-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">
@@ -441,6 +455,12 @@ export default function DriverDetailPage() {
           )}
         </div>
       </div>
+      <ImageLightbox
+        open={!!preview}
+        onClose={() => setPreview(null)}
+        src={preview?.url ?? null}
+        title={preview?.title ?? ""}
+      />
     </>
   );
 }

@@ -88,7 +88,7 @@ export default function WalletsPage() {
               : "font-bold text-slate-900 dark:text-white"
           }
         >
-          {money(account.balanceCache)}
+          {money(account.balanceCache, account.currency)}
         </span>
       ),
     },

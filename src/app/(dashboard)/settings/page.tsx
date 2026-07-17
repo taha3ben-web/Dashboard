@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { api, getApiErrorMessage } from "@/lib/api";
 import { num } from "@/lib/format";
 import { SettingsPanel } from "./SettingsPanel";
+import { SettingHistoryModal } from "./SettingHistoryModal";
 import {
   SettingsModals,
   emptyCityForm,
@@ -70,6 +71,7 @@ export default function SettingsPage() {
   const [cityForm, setCityForm] = useState<CityForm>(emptyCityForm());
   const [zoneForm, setZoneForm] = useState<ZoneForm>(emptyZoneForm());
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [historySetting, setHistorySetting] = useState<Setting | null>(null);
 
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
@@ -216,6 +218,34 @@ export default function SettingsPage() {
       await loadSettings();
     } catch (saveError) {
       setError(getApiErrorMessage(saveError, "تعذّر حفظ الإعدادات"));
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function requestSettingReview(key: string) {
+    clearFeedback();
+    setBusyAction(`review:${key}`);
+    try {
+      await api.post(`/settings/${encodeURIComponent(key)}/request-review`);
+      setSuccess(`تم إرسال ${key} لمراجع آخر. لم يصل التغيير للتطبيقات بعد.`);
+      await loadSettings();
+    } catch (reviewError) {
+      setError(getApiErrorMessage(reviewError, "تعذّر إرسال طلب المراجعة"));
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function discardSettingDraft(key: string) {
+    clearFeedback();
+    setBusyAction(`discard:${key}`);
+    try {
+      await api.post(`/settings/${encodeURIComponent(key)}/discard-draft`);
+      setSuccess(`تم إلغاء مسودة ${key} واستعادة النسخة المنشورة.`);
+      await loadSettings();
+    } catch (discardError) {
+      setError(getApiErrorMessage(discardError, "تعذّر إلغاء المسودة"));
     } finally {
       setBusyAction("");
     }
@@ -536,6 +566,9 @@ export default function SettingsPage() {
           openEditor={openSettingEditor}
           saveOne={saveInlineSetting}
           saveAll={saveAllDirty}
+          requestReview={requestSettingReview}
+          discardDraft={discardSettingDraft}
+          openHistory={setHistorySetting}
           refresh={loadSettings}
           remove={(setting) =>
             setDeleteTarget({
@@ -608,6 +641,15 @@ export default function SettingsPage() {
         setDeleteTarget={setDeleteTarget}
         deleteSelected={deleteSelected}
         busyAction={busyAction}
+      />
+      <SettingHistoryModal
+        settingKey={historySetting?.key ?? null}
+        currentPublishedVersion={historySetting?.publishedVersion ?? 0}
+        onClose={() => setHistorySetting(null)}
+        onRollbackComplete={async () => {
+          await loadSettings();
+          setSuccess("تم إعداد نسخة الاسترجاع وإرسالها لموافقة موظف آخر.");
+        }}
       />
     </>
   );

@@ -7,8 +7,50 @@ export interface Setting {
   isSensitive: boolean;
   hasValue?: boolean;
   masked?: boolean;
+  publicationStatus: "DRAFT" | "PUBLISHED";
   version: number;
+  publishedVersion: number;
+  publishedAt?: string | null;
   updatedAt: string;
+  changeRequests?: Array<{
+    id: string;
+    status: "PENDING";
+    requestedById: string;
+    sourceVersion: number;
+    createdAt: string;
+  }>;
+}
+
+export interface SettingRevision {
+  id: string;
+  publishedVersion: number;
+  sourceVersion: number;
+  value: unknown;
+  action: string;
+  publishedById?: string | null;
+  createdAt: string;
+}
+
+export interface SettingChangeRequest {
+  id: string;
+  requestedValue: unknown;
+  sourceVersion: number;
+  requestType: string;
+  rollbackFromVersion?: number | null;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  reviewNote?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  setting: {
+    id: string;
+    key: string;
+    group?: string | null;
+    version: number;
+    publishedVersion: number;
+    publishedValue?: unknown;
+  };
+  requestedBy: { id: string; name: string; email?: string | null };
+  reviewedBy?: { id: string; name: string; email?: string | null } | null;
 }
 
 export interface City {
