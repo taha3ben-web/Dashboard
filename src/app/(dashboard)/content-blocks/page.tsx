@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FileText, Plus, Trash2, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { Topbar } from "@/components/Topbar";
 import { DataTable, type Column } from "@/components/DataTable";
 import { api, getApiErrorMessage } from "@/lib/api";
@@ -220,7 +220,7 @@ export default function ContentBlocksPage() {
 
   return (
     <div className="space-y-4">
-      <Topbar title="قوالب المحتوى" icon={FileText} />
+      <Topbar title="قوالب المحتوى" />
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">
