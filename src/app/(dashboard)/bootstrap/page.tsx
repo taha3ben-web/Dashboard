@@ -137,7 +137,7 @@ export default function BootstrapPreviewPage() {
     <div>
       <Topbar title="تهيئة التطبيق" />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <p className="text-sm text-gray-600">
           معاينة الحمولة الموحّدة التي يستلمها التطبيق عند الإقلاع من نقطة
           <span className="mx-1 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs">

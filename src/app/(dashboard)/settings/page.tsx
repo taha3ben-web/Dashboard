@@ -525,7 +525,7 @@ export default function SettingsPage() {
   return (
     <>
       <Topbar title="الإعدادات والمدن والمناطق" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-900/40 dark:bg-cyan-950/20">
           <div className="flex items-center gap-2 text-cyan-700 dark:text-cyan-300">
             <Globe2 size={18} />

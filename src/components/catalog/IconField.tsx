@@ -1,7 +1,7 @@
 "use client";
 
-import { CSSProperties } from "react";
-import { ICON_TYPES } from "@/lib/catalog";
+import { useRef, useState, type CSSProperties, type ChangeEvent } from "react";
+import { ImageIcon, Trash2, Upload } from "lucide-react";
 
 export interface IconValue {
   iconType: string;
@@ -11,145 +11,64 @@ export interface IconValue {
   color?: string | null;
 }
 
-/**
- * حقل اختيار الأيقونة/الصورة مع معاينة حية قبل الحفظ.
- */
-export function IconField({
-  value,
-  onChange,
-  showImage = true,
-}: {
-  value: IconValue;
-  onChange: (v: IconValue) => void;
-  showImage?: boolean;
-}) {
-  const set = (patch: Partial<IconValue>) => onChange({ ...value, ...patch });
+const MAX_IMAGE_BYTES = 600_000;
+const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 
-  const previewImgStyle: CSSProperties = { width: 48, height: 48 };
+/** اختيار صورة محلية وتحويلها إلى Data URL محفوظة مع الفئة/النوع. */
+export function IconField({ value, onChange }: { value: IconValue; onChange: (v: IconValue) => void; showImage?: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState("");
 
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex-1">
-          <span className="mb-1 block text-sm font-medium">نوع الأيقونة</span>
-          <select
-            value={value.iconType}
-            onChange={(e) => set({ iconType: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-          >
-            {ICON_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="mb-1 block text-sm font-medium">اللون</span>
-          <input
-            type="color"
-            value={value.color || "#4f46e5"}
-            onChange={(e) => set({ color: e.target.value })}
-            className="h-10 w-14 cursor-pointer rounded-lg border border-gray-300 dark:border-gray-700"
-          />
-        </label>
+  function chooseImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setError("الصيغة غير مدعومة. استخدم PNG أو JPG أو WebP أو SVG.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError("حجم الصورة كبير. الحد الأقصى 600 KB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setError("");
+      onChange({ ...value, iconType: "PNG", iconValue: null, iconUrl: null, imageUrl: String(reader.result), color: value.color || "#4f46e5" });
+    };
+    reader.onerror = () => setError("تعذّرت قراءة الصورة من الجهاز.");
+    reader.readAsDataURL(file);
+  }
+
+  return <div className="space-y-3">
+    <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+      <div>
+        <span className="mb-1 block text-sm font-medium">صورة الفئة أو نوع المركبة</span>
+        <input ref={inputRef} type="file" accept={ACCEPTED_IMAGE_TYPES.join(",")} onChange={chooseImage} className="hidden" />
+        <button type="button" onClick={() => inputRef.current?.click()} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 px-4 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/20 dark:text-indigo-300">
+          <Upload size={17} /> {value.imageUrl ? "استبدال الصورة" : "رفع صورة من الجهاز"}
+        </button>
+        <p className="mt-1 text-xs text-gray-400">PNG أو JPG أو WebP أو SVG — بحد أقصى 600 KB. لا حاجة إلى رابط خارجي.</p>
       </div>
-
-      {value.iconType === "EMOJI" ? (
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">الرمز (Emoji)</span>
-          <input
-            value={value.iconValue ?? ""}
-            onChange={(e) => set({ iconValue: e.target.value })}
-            placeholder="\ud83d\ude97"
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-          />
-        </label>
-      ) : (
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">رابط الأيقونة (URL)</span>
-          <input
-            value={value.iconUrl ?? ""}
-            onChange={(e) => set({ iconUrl: e.target.value })}
-            placeholder="https://..."
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-          />
-        </label>
-      )}
-
-      {showImage ? (
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">صورة إضافية (URL)</span>
-          <input
-            value={value.imageUrl ?? ""}
-            onChange={(e) => set({ imageUrl: e.target.value })}
-            placeholder="https://..."
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-          />
-        </label>
-      ) : null}
-
-      {/* معاينة حية */}
-      <div className="flex items-center gap-3 rounded-lg border border-dashed border-gray-300 p-3 dark:border-gray-700">
-        <span className="text-xs text-gray-400">معاينة:</span>
-        <IconPreview value={value} />
-        {showImage && value.imageUrl ? (
-          <img
-            src={value.imageUrl}
-            alt="preview"
-            style={previewImgStyle}
-            className="rounded-lg object-cover"
-            onError={(e) => (e.currentTarget.style.display = "none")}
-          />
-        ) : null}
-      </div>
+      <label>
+        <span className="mb-1 block text-sm font-medium">لون الخلفية</span>
+        <input type="color" value={value.color || "#4f46e5"} onChange={(event) => onChange({ ...value, color: event.target.value })} className="h-11 w-16 cursor-pointer rounded-lg border border-gray-300 dark:border-gray-700" />
+      </label>
     </div>
-  );
+
+    {error ? <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950/20 dark:text-red-300">{error}</div> : null}
+
+    <div className="flex min-h-20 items-center gap-3 rounded-lg border border-dashed border-gray-300 p-3 dark:border-gray-700">
+      <span className="text-xs text-gray-400">المعاينة:</span>
+      <IconPreview value={value} size={52} />
+      {value.imageUrl ? <button type="button" onClick={() => onChange({ ...value, iconType: "PNG", iconValue: null, iconUrl: null, imageUrl: null })} className="mr-auto flex min-h-10 items-center gap-1 rounded-lg px-3 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"><Trash2 size={15} /> إزالة</button> : null}
+    </div>
+  </div>;
 }
 
-export function IconPreview({
-  value,
-  size = 44,
-}: {
-  value: IconValue;
-  size?: number;
-}) {
-  const bg = value.color || "#4f46e5";
-  const boxStyle: CSSProperties = { width: size, height: size, background: bg };
-  const imgStyle: CSSProperties = { width: size, height: size };
-  const emojiStyle: CSSProperties = {
-    width: size,
-    height: size,
-    background: bg + "22",
-  };
-
-  if (value.iconType === "EMOJI") {
-    return (
-      <span
-        className="flex items-center justify-center rounded-lg text-2xl"
-        style={emojiStyle}
-      >
-        {value.iconValue || "\u2753"}
-      </span>
-    );
-  }
-  if (value.iconUrl) {
-    return (
-      <img
-        src={value.iconUrl}
-        alt="icon"
-        className="rounded-lg object-contain"
-        style={imgStyle}
-        onError={(e) => (e.currentTarget.style.display = "none")}
-      />
-    );
-  }
-  return (
-    <span
-      className="flex items-center justify-center rounded-lg text-white"
-      style={boxStyle}
-    >
-      ?
-    </span>
-  );
+export function IconPreview({ value, size = 44 }: { value: IconValue; size?: number }) {
+  const imgStyle: CSSProperties = { width: size, height: size, background: value.color || "#4f46e5" };
+  const source = value.imageUrl || value.iconUrl;
+  if (source) return <img src={source} alt="" className="rounded-lg object-contain" style={imgStyle} onError={(event) => { event.currentTarget.style.display = "none"; }} />;
+  return <span className="flex items-center justify-center rounded-lg text-white" style={imgStyle}><ImageIcon size={Math.max(18, Math.round(size * 0.45))} /></span>;
 }

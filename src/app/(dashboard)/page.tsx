@@ -152,7 +152,7 @@ export default function DashboardHome() {
   return (
     <>
       <Topbar title="لوحة التحكم" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
             label="السائقون"

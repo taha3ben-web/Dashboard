@@ -11,7 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Topbar } from "@/components/Topbar";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import {
   CATALOG_DOMAINS,
   USAGE_TYPES,
@@ -53,7 +53,7 @@ function emptyForm(): FormState {
     descriptionI18n: {},
     usageType: "RIDE",
     domain: "MOBILITY",
-    icon: { iconType: "EMOJI", iconValue: "", color: "#4f46e5" },
+    icon: { iconType: "PNG", imageUrl: "", color: "#4f46e5" },
   };
 }
 
@@ -106,11 +106,11 @@ export default function CategoriesPage() {
         : undefined,
       usageType: form.usageType,
       domain: form.domain,
-      iconType: form.icon.iconType,
-      iconValue: form.icon.iconValue || undefined,
-      iconUrl: form.icon.iconUrl || undefined,
+      iconType: "PNG",
       imageUrl: form.icon.imageUrl || undefined,
       color: form.icon.color || undefined,
+      status: form.id ? undefined : "PUBLISHED",
+      isActive: true,
     };
     try {
       if (form.id) await api.patch(`/vehicle-categories/${form.id}`, body);
@@ -118,10 +118,7 @@ export default function CategoriesPage() {
       setForm(null);
       reload();
     } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { message?: string | string[] } } })
-          ?.response?.data?.message ?? "تعذّر الحفظ";
-      setSaveErr(Array.isArray(msg) ? msg.join("، ") : String(msg));
+      setSaveErr(getApiErrorMessage(e, "تعذّر حفظ الفئة"));
     } finally {
       setSaving(false);
     }

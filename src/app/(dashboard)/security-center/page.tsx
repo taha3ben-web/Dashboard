@@ -386,7 +386,7 @@ export default function SecurityCenterPage() {
   return (
     <>
       <Topbar title="مركز الأمان والسجلات" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {!canInspectOtherSessions ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
             يمكنك مراجعة سجلاتك والجلسات الحالية فقط. إدارة جلسات مستخدمين آخرين

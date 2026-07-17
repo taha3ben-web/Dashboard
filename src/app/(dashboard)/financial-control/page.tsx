@@ -227,7 +227,7 @@ export default function FinancialControlPage() {
   return (
     <>
       <Topbar title="المطابقة والتسوية" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {!canManagePayments ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
             هذا الدور يستطيع مراجعة فروقات المطابقة وطابور التسوية فقط. تشغيل دفعات التسوية مخفي حتى تتوفر صلاحية الإدارة المالية.

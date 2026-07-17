@@ -5,6 +5,7 @@ export interface StaffMe {
   user: {
     id: string;
     name: string;
+    username?: string | null;
     phone: string;
     email?: string;
     type: string;

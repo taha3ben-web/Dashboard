@@ -174,6 +174,8 @@ export default function NotificationsPage() {
 
   const targetLabel = (target: string) =>
     TARGETS.find((item) => item.value === target)?.label ?? target;
+  const channelLabel = (channel: string) =>
+    CHANNELS.find((item) => item.value === channel)?.label ?? channel;
 
   const columns: Column<NotificationRow>[] = [
     {
@@ -194,15 +196,15 @@ export default function NotificationsPage() {
       render: (row) => (
         <div className="max-w-72 text-xs">
           <div>
-            {targetLabel(row.target)} · {row.channel}
+            {targetLabel(row.target)} · {channelLabel(row.channel)}
           </div>
           <div className="text-gray-500">
-            {row.appId || "all apps"} · {row.clientOs || "all os"}
+            {row.appId || "كل التطبيقات"} · {row.clientOs || "كل الأنظمة"}
           </div>
           <div className="text-gray-500">
             {row.countryCodes.length > 0
               ? row.countryCodes.join(" / ")
-              : "all markets"}
+              : "كل الأسواق"}
             {row.localeCodes.length > 0
               ? ` · ${row.localeCodes.join(" / ")}`
               : ""}
@@ -269,11 +271,9 @@ export default function NotificationsPage() {
   return (
     <>
       <Topbar title="مركز الحملات والإشعارات" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-800 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-200">
-          يمكنك إدارة حملات الإشعارات والرسائل حسب التطبيق، النظام، السوق،
-          اللغة، ومدن السائقين مع جدولة مستقبلية وربط موحد عبر{" "}
-          <code>campaignKey</code>.
+          أنشئ رسالة فورية أو داخل التطبيق أو رسالة نصية أو بريدًا إلكترونيًا، ثم اختر الجمهور وموعد الإرسال.
         </section>
 
         {canSendNotifications ? (
@@ -317,7 +317,7 @@ export default function NotificationsPage() {
                 onChange={(e) =>
                   setForm({ ...form, campaignKey: e.target.value })
                 }
-                placeholder="campaignKey موحد"
+                placeholder="مفتاح الحملة (اختياري)"
                 className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm dark:border-gray-700"
               />
               <input
@@ -332,20 +332,20 @@ export default function NotificationsPage() {
                 <input
                   value={form.userId}
                   onChange={(e) => setForm({ ...form, userId: e.target.value })}
-                  placeholder="userId"
+                  placeholder="معرّف المستخدم"
                   className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm dark:border-gray-700"
                 />
               ) : null}
               <input
                 value={form.appId}
                 onChange={(e) => setForm({ ...form, appId: e.target.value })}
-                placeholder="appId"
+                placeholder="معرّف التطبيق (اختياري)"
                 className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm dark:border-gray-700"
               />
               <input
                 value={form.clientOs}
                 onChange={(e) => setForm({ ...form, clientOs: e.target.value })}
-                placeholder="clientOs"
+                placeholder="نظام التشغيل (اختياري)"
                 className="rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm dark:border-gray-700"
               />
               <input

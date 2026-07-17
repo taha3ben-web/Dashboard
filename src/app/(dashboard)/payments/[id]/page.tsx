@@ -123,7 +123,7 @@ export default function PaymentDetailsPage() {
   return (
     <>
       <Topbar title="تفاصيل الدفعة" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <div>
           <Link href="/payments" className="text-sm text-brand hover:underline">
             ← العودة إلى قائمة المدفوعات

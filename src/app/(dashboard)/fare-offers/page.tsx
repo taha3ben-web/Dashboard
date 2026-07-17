@@ -94,7 +94,7 @@ export default function FareOffersPage() {
     <div>
       <Topbar title="عروض السائقين (المزايدة)" />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <p className="text-sm text-gray-600">
           بعد أن يطلب الراكب عرض سعر تفاوضيًا، يقدّم السائقون
           <span className="mx-1 font-semibold">عروضًا مضادة</span>

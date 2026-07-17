@@ -178,7 +178,7 @@ export default function DriverDetailPage() {
   return (
     <>
       <Topbar title="تفاصيل السائق" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {!canManageDrivers ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
             هذا العرض للقراءة فقط بالنسبة لإدارة الحساب. تحتاج إلى صلاحية إدارة السائقين أو الوثائق لتنفيذ الأوامر الحساسة.

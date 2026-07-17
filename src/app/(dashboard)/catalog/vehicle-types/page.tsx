@@ -13,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Topbar } from "@/components/Topbar";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import {
   USAGE_TYPES,
   VehicleCategory,
@@ -87,7 +87,7 @@ function emptyForm(categoryId = ""): FormState {
     multiplier: "1",
     capacity: "4",
     luggage: "",
-    icon: { iconType: "EMOJI", iconValue: "", color: "#4f46e5" },
+    icon: { iconType: "PNG", imageUrl: "", color: "#4f46e5" },
     allowsNegotiation: false,
     supportsCash: true,
     supportsWallet: true,
@@ -204,12 +204,16 @@ export default function VehicleTypesPage() {
       setTab("basic");
       return setSaveErr("الاسم بالعربية مطلوب");
     }
+    if (!form.categoryId) {
+      setTab("basic");
+      return setSaveErr("يجب اختيار فئة حتى يظهر نوع المركبة في تطبيقي الراكب والسائق");
+    }
     setSaving(true);
     setSaveErr("");
     const body: Record<string, unknown> = {
       name: ar,
       nameI18n: form.nameI18n,
-      categoryId: form.categoryId || undefined,
+      categoryId: form.categoryId,
       description: form.descriptionI18n.ar || undefined,
       descriptionI18n: Object.keys(form.descriptionI18n).length
         ? form.descriptionI18n
@@ -218,9 +222,7 @@ export default function VehicleTypesPage() {
       multiplier: numOrUndef(form.multiplier),
       capacity: numOrUndef(form.capacity),
       luggage: numOrUndef(form.luggage),
-      iconType: form.icon.iconType,
-      iconValue: form.icon.iconValue || undefined,
-      iconUrl: form.icon.iconUrl || undefined,
+      iconType: "PNG",
       imageUrl: form.icon.imageUrl || undefined,
       color: form.icon.color || undefined,
       allowsNegotiation: form.allowsNegotiation,
@@ -247,6 +249,8 @@ export default function VehicleTypesPage() {
             .map((s) => s.trim())
             .filter(Boolean)
         : undefined,
+      status: form.id ? undefined : "PUBLISHED",
+      isActive: true,
     };
     try {
       if (form.id) await api.patch(`/vehicle-types/${form.id}`, body);
@@ -254,10 +258,7 @@ export default function VehicleTypesPage() {
       setForm(null);
       reload();
     } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { message?: string | string[] } } })
-          ?.response?.data?.message ?? "تعذّر الحفظ";
-      setSaveErr(Array.isArray(msg) ? msg.join("، ") : String(msg));
+      setSaveErr(getApiErrorMessage(e, "تعذّر حفظ نوع المركبة"));
     } finally {
       setSaving(false);
     }

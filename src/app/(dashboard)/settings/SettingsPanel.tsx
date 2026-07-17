@@ -3,6 +3,7 @@
 import { Plus, Save } from "lucide-react";
 import { dateTime } from "@/lib/format";
 import type { Setting } from "./settings.types";
+import { FriendlyJsonEditor, friendlySettingTitle, isFriendlySetting } from "./FriendlyJsonEditor";
 
 interface Props {
   settings: Setting[];
@@ -206,9 +207,10 @@ export function SettingsPanel(props: Props) {
               className="grid gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-800 lg:grid-cols-[220px_1fr_auto]"
             >
               <div>
-                <div className="font-mono text-sm font-medium">
-                  {setting.key}
+                <div className="text-sm font-semibold">
+                  {friendlySettingTitle(setting.key) ?? setting.key}
                 </div>
+                {isFriendlySetting(setting.key) ? <div className="mt-0.5 font-mono text-[11px] text-gray-400">{setting.key}</div> : null}
                 <div className="mt-1 flex flex-wrap gap-1 text-xs">
                   <span className="rounded bg-gray-100 px-2 py-0.5 dark:bg-gray-800">
                     {setting.group || "بدون مجموعة"}
@@ -362,6 +364,8 @@ export function SettingsPanel(props: Props) {
                     </div>
                   );
                 })()
+              ) : isFriendlySetting(setting.key) ? (
+                <FriendlyJsonEditor settingKey={setting.key} draft={drafts[setting.key]} onChange={(value) => updateDraft(setting.key, value)} />
               ) : (
                 <textarea
                   value={drafts[setting.key] ?? ""}

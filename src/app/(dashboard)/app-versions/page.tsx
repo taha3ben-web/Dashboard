@@ -262,7 +262,7 @@ export default function AppVersionsPage() {
   return (
     <>
       <Topbar title="حوكمة إصدارات التطبيق" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-800 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-200">
           يمكنك الآن إدارة سياسات الإصدار حسب التطبيق، السوق، نظام التشغيل،
           وقناة النشر مع rollout تدريجي ورسائل تحديث مخصصة وربط مباشر مع{" "}

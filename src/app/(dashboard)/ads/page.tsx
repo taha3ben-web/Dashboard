@@ -276,7 +276,7 @@ export default function AdsPage() {
   return (
     <>
       <Topbar title="مركز الإعلانات والحملات" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <div className="rounded-xl border border-pink-200 bg-pink-50 p-4 dark:border-pink-900/40 dark:bg-pink-950/20">
           <div className="flex items-center gap-2 text-pink-700 dark:text-pink-300">
             <Megaphone size={18} />

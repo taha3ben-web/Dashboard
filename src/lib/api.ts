@@ -25,6 +25,7 @@ export function getApiErrorMessage(
   fallback = "حدث خطأ غير متوقع",
 ): string {
   if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
     const payload = error.response?.data as
       { error?: unknown; message?: unknown } | undefined;
     const envelopeError =
@@ -33,6 +34,11 @@ export function getApiErrorMessage(
         : undefined;
     const candidate =
       envelopeError?.message ?? payload?.error ?? payload?.message;
+
+    if (!error.response) return "تعذّر الاتصال بالخادم. تحقق من رابط API والإنترنت ثم أعد المحاولة.";
+    if (status === 404) return "هذه الوظيفة غير متاحة في نسخة الخادم الحالية. انشر Backend وDashboard من الإصدار نفسه.";
+    if (status === 403) return "ليس لديك الصلاحية اللازمة لتنفيذ هذا الإجراء.";
+    if (status && status >= 500) return "حدث خطأ داخل الخادم. أعد المحاولة وراجع سجل Backend إذا استمر الخطأ.";
 
     if (Array.isArray(candidate)) {
       return candidate.map((item) => String(item)).join("، ");

@@ -167,7 +167,7 @@ export default function ReportsPage() {
   return (
     <>
       <Topbar title="التقارير" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <section className="flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
           <div>
             <div className="mb-1 text-xs text-gray-500">من</div>

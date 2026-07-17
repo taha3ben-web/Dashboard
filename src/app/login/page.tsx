@@ -11,10 +11,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { getApiErrorMessage } from "@/lib/api";
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [phone, setPhone] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,13 +28,9 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login(phone.trim(), password);
+      await login(username.trim(), password);
     } catch (loginError) {
-      setError(
-        loginError instanceof Error
-          ? loginError.message
-          : "فشل تسجيل الدخول. تحقق من رقم الهاتف وكلمة المرور.",
-      );
+      setError(getApiErrorMessage(loginError, "فشل تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور."));
     } finally {
       setLoading(false);
     }
@@ -111,21 +108,21 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label
-                  htmlFor="phone"
+                  htmlFor="username"
                   className="mb-2 block text-sm font-bold text-slate-700 dark:text-gray-300"
                 >
-                  رقم الهاتف
+                  اسم المستخدم
                 </label>
                 <input
-                  id="phone"
-                  type="tel"
-                  inputMode="tel"
+                  id="username"
+                  type="text"
+                  inputMode="text"
                   autoComplete="username"
                   dir="ltr"
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
                   required
-                  placeholder="0000000000"
+                  placeholder="admin"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:focus:border-indigo-400"
                 />
               </div>
@@ -177,7 +174,7 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={loading || !phone.trim() || !password}
+                disabled={loading || !username.trim() || !password}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-indigo-600 to-violet-600 px-4 py-3.5 font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:-translate-y-0.5 hover:shadow-xl disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? (

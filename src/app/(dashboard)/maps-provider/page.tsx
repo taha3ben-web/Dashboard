@@ -102,7 +102,7 @@ export default function MapsProviderPage() {
   return (
     <>
       <Topbar title="مزوّد الخرائط والمواقع" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-800 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-200">
           يُدير هذا القسم مزوّد الخرائط المستخدم خلف الباكند (إكمال
           العناوين، التحويل الجغرافي، حساب المسارات). الوضع الافتراضي{" "}

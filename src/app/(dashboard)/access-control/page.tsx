@@ -36,6 +36,7 @@ interface RoleItem {
 interface StaffItem {
   id: string;
   name: string;
+  username?: string | null;
   phone: string;
   status: string;
   createdAt: string;
@@ -97,6 +98,7 @@ export default function AccessControlPage() {
   const [busyAction, setBusyAction] = useState("");
   const [staffForm, setStaffForm] = useState({
     name: "",
+    username: "",
     phone: "",
     password: "",
     roleId: "",
@@ -352,6 +354,7 @@ export default function AccessControlPage() {
       await api.post("/staff", staffForm);
       setStaffForm({
         name: "",
+        username: "",
         phone: "",
         password: "",
         roleId: roles[0]?.id ?? "",
@@ -444,6 +447,7 @@ export default function AccessControlPage() {
       render: (row) => (
         <div>
           <div className="font-medium">{row.name}</div>
+          <div className="font-mono text-xs text-indigo-600 dark:text-indigo-300">@{row.username ?? "غير محدد"}</div>
           <div className="text-xs text-gray-500">{row.phone}</div>
         </div>
       ),
@@ -585,7 +589,7 @@ export default function AccessControlPage() {
   return (
     <>
       <Topbar title="إدارة الوصول والأدوار" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900/40 dark:bg-indigo-950/20">
           <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300">
             <KeyRound size={18} />
@@ -610,8 +614,8 @@ export default function AccessControlPage() {
           </div>
         ) : null}
 
-        <section className="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 md:grid-cols-5">
-          <div className="md:col-span-5 flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+        <section className="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 md:grid-cols-2 xl:grid-cols-6">
+          <div className="md:col-span-2 xl:col-span-6 flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
             <UserRoundCog size={16} /> إنشاء حساب موظف جديد
           </div>
           <input
@@ -620,6 +624,13 @@ export default function AccessControlPage() {
               setStaffForm({ ...staffForm, name: event.target.value })
             }
             placeholder="اسم الموظف"
+            className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
+          />
+          <input
+            value={staffForm.username}
+            onChange={(event) => setStaffForm({ ...staffForm, username: event.target.value })}
+            placeholder="اسم المستخدم (مثل support01)"
+            dir="ltr"
             className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
           />
           <input
@@ -661,6 +672,7 @@ export default function AccessControlPage() {
             disabled={
               busyAction === "create-staff" ||
               !staffForm.name ||
+              !staffForm.username ||
               !staffForm.phone ||
               !staffForm.password ||
               !staffForm.roleId

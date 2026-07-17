@@ -345,7 +345,7 @@ export default function OperationsPage() {
   return (
     <>
       <Topbar title="مركز العمليات" />
-      <main className="space-y-6 p-6">
+      <main className="space-y-6 p-4 sm:p-6">
         <header className="rounded-2xl border border-slate-200 bg-gradient-to-l from-white to-indigo-50 p-5 shadow-sm dark:border-gray-800 dark:from-gray-900 dark:to-indigo-950/30">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>

@@ -151,7 +151,7 @@ export default function FareQuotesPage() {
     <div>
       <Topbar title="عروض الأسعار التفاوضية" />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <p className="text-sm text-gray-600">
           التسعير تفاوضي على نمط inDrive: يحصل الراكب على سعر مقترَح ونطاق تفاوض
           <span className="mx-1 font-semibold">[الحد الأدنى — الحد الأقصى]</span>

@@ -449,7 +449,7 @@ export default function AgentsPage() {
   return (
     <>
       <Topbar title="إدارة الوكلاء" />
-      <div className="space-y-5 p-6">
+      <div className="space-y-5 p-4 sm:p-6">
         <div className="rounded-xl border border-purple-200 bg-purple-50 p-4 dark:border-purple-900/40 dark:bg-purple-950/20">
           <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
             <Bot size={18} />

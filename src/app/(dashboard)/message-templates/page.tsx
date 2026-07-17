@@ -297,7 +297,7 @@ export default function MessageTemplatesPage() {
   return (
     <>
       <Topbar title="قوالب الرسائل" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {msg ? (
           <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm text-indigo-700">
             {msg}

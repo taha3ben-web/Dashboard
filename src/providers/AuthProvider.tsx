@@ -33,7 +33,7 @@ interface AuthState {
   ready: boolean;
   profile: StaffMe | null;
   permissions: string[];
-  login: (phone: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   refreshProfile: () => Promise<StaffMe | null>;
   can: (...required: string[]) => boolean;
@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [pathname, router]);
 
-  async function login(phone: string, password: string): Promise<void> {
+  async function login(username: string, password: string): Promise<void> {
     try {
       const res = await api.post<{
         accessToken: string;
@@ -196,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         permissions: string[];
         user: StaffMe["user"];
         staffRole?: StaffMe["staffRole"];
-      }>("/auth/login", { phone, password });
+      }>("/auth/login", { username: username.trim().toLowerCase(), password });
 
       if (res.data.role !== "STAFF") {
         throw new Error("هذا الحساب ليس لديه صلاحية الدخول للوحة");

@@ -82,7 +82,7 @@ export default function SettingApprovalsPage() {
   return (
     <>
       <Topbar title="موافقات نشر الإعدادات" />
-      <div className="space-y-5 p-6">
+      <div className="space-y-5 p-4 sm:p-6">
         <section className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-800 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-200">
           قاعدة الأربعة أعين: منشئ التغيير لا يستطيع اعتماده أو رفضه. لا يحدث
           النشر إلا بعد موافقة موظف آخر، مع حفظ النسخة وهوية الطرفين.

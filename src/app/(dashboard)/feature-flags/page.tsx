@@ -465,7 +465,7 @@ export default function FeatureFlagsPage() {
   return (
     <>
       <Topbar title="مفاتيح الميزات والتحكم المتقدم" />
-      <div className="space-y-5 p-6">
+      <div className="space-y-5 p-4 sm:p-6">
         <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-800 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-indigo-200">
           التطبيقات تقرأ النتيجة المحسوبة من <code>/public/config</code>. يمكن
           الآن استهداف الميزة حسب التطبيق، السوق، المدينة، نظام التشغيل،
