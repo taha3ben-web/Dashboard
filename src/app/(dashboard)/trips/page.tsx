@@ -15,6 +15,7 @@ interface Trip {
   id: string;
   status: string;
   fare?: number;
+  paymentMethod?: string;
   cancellationFee?: number | null;
   cancellationSettledAt?: string | null;
   cancelledBy?: string | null;
@@ -27,6 +28,12 @@ interface Trip {
   passenger?: { name: string; phone?: string };
   driver?: { user?: { name: string; phone?: string } };
 }
+
+const PAY_LABELS: Record<string, string> = {
+  CASH: "نقدي",
+  WALLET: "محفظة",
+  CARD: "بطاقة",
+};
 
 const STATUSES = [
   "",
@@ -52,7 +59,10 @@ export default function TripsPage() {
 
   const load = useCallback(() => {
     setError("");
-    const params: Record<string, string | number | boolean> = { page, limit: 20 };
+    const params: Record<string, string | number | boolean> = {
+      page,
+      limit: 20,
+    };
     if (status) params.status = status;
     if (search) params.search = search;
     if (unsettledOnly) params.unsettledOnly = true;
@@ -65,7 +75,11 @@ export default function TripsPage() {
       .catch((loadError) => {
         setRows([]);
         setTotal(0);
-        setError(loadError instanceof Error ? loadError.message : "تعذّر تحميل الرحلات");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "تعذّر تحميل الرحلات",
+        );
       });
   }, [page, search, status, unsettledOnly]);
 
@@ -81,7 +95,11 @@ export default function TripsPage() {
       await api.patch(`/trips/${id}/status`, { status: to });
       await load();
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : "تعذّر تحديث الحالة");
+      setError(
+        actionError instanceof Error
+          ? actionError.message
+          : "تعذّر تحديث الحالة",
+      );
     } finally {
       setBusyId(null);
     }
@@ -95,7 +113,11 @@ export default function TripsPage() {
       await api.post(`/trips/${id}/retry-settlement`, {});
       await load();
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : "تعذّر إعادة المحاولة");
+      setError(
+        actionError instanceof Error
+          ? actionError.message
+          : "تعذّر إعادة المحاولة",
+      );
     } finally {
       setBusyId(null);
     }
@@ -106,7 +128,9 @@ export default function TripsPage() {
     [rows],
   );
   const unsettledTrips = useMemo(
-    () => rows.filter((trip) => trip.status === "COMPLETED" && !trip.settledAt).length,
+    () =>
+      rows.filter((trip) => trip.status === "COMPLETED" && !trip.settledAt)
+        .length,
     [rows],
   );
 
@@ -117,7 +141,10 @@ export default function TripsPage() {
       render: (t) => (
         <div className="flex flex-col">
           <span className="font-mono text-xs">{t.id.slice(0, 8)}</span>
-          <Link href={`/payments?search=${t.id}`} className="text-xs text-brand hover:underline">
+          <Link
+            href={`/payments?search=${t.id}`}
+            className="text-xs text-brand hover:underline"
+          >
             ابحث في المدفوعات
           </Link>
         </div>
@@ -139,6 +166,17 @@ export default function TripsPage() {
       render: (t) => (t.distanceKm ? `${t.distanceKm} كم` : "-"),
     },
     { key: "fare", header: "التكلفة", render: (t) => money(t.fare) },
+    {
+      key: "paymentMethod",
+      header: "طريقة الدفع",
+      render: (t) => (
+        <span className="text-xs">
+          {t.paymentMethod
+            ? (PAY_LABELS[t.paymentMethod] ?? t.paymentMethod)
+            : "-"}
+        </span>
+      ),
+    },
     {
       key: "cancellationFee",
       header: "غرامة إلغاء السائق",
@@ -198,7 +236,9 @@ export default function TripsPage() {
               إعادة التسوية
             </button>
           ) : null}
-          {!canManageTrips ? <span className="text-xs text-gray-400">عرض فقط</span> : null}
+          {!canManageTrips ? (
+            <span className="text-xs text-gray-400">عرض فقط</span>
+          ) : null}
         </div>
       ),
     },
@@ -212,7 +252,8 @@ export default function TripsPage() {
       <div className="space-y-4 p-6">
         {!canManageTrips ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
-            هذا الدور يطالع الرحلات فقط. أوامر إلغاء الرحلة وإعادة التسوية متاحة فقط لمن لديهم صلاحية إدارة الرحلات.
+            هذا الدور يطالع الرحلات فقط. أوامر إلغاء الرحلة وإعادة التسوية متاحة
+            فقط لمن لديهم صلاحية إدارة الرحلات.
           </div>
         ) : null}
 
@@ -230,17 +271,31 @@ export default function TripsPage() {
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-400">
-          لا توجد أي رسوم إلغاء على الراكب. عند إلغاء السائق للرحلة
-          تُحسم تلقائيًا غرامة من محفظة السائق = نسبة % من قيمة الرحلة الملغاة،
+          لا توجد أي رسوم إلغاء على الراكب. عند إلغاء السائق للرحلة تُحسم
+          تلقائيًا غرامة من محفظة السائق = نسبة % من قيمة الرحلة الملغاة،
           والنسبة قابلة للضبط من لوحة التحكم عبر مفتاح الإعدادات
-          trips.driverCancellationPenaltyPct (0 = معطّلة). تُسجّل الغرامة عبر دفتر
-          الأستاذ (قيد مزدوج متوازن) مع حدث تدقيق.
+          trips.driverCancellationPenaltyPct (0 = معطّلة). تُسجّل الغرامة عبر
+          دفتر الأستاذ (قيد مزدوج متوازن) مع حدث تدقيق.
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="إجمالي المعروض" value={num(total)} icon={<Route size={18} />} />
-          <StatCard label="المكتملة في الصفحة" value={num(completedTrips)} icon={<CheckCircle2 size={18} />} accent="green" />
-          <StatCard label="معلّقة التسوية" value={num(unsettledTrips)} icon={<AlertTriangle size={18} />} accent="amber" />
+          <StatCard
+            label="إجمالي المعروض"
+            value={num(total)}
+            icon={<Route size={18} />}
+          />
+          <StatCard
+            label="المكتملة في الصفحة"
+            value={num(completedTrips)}
+            icon={<CheckCircle2 size={18} />}
+            accent="green"
+          />
+          <StatCard
+            label="معلّقة التسوية"
+            value={num(unsettledTrips)}
+            icon={<AlertTriangle size={18} />}
+            accent="amber"
+          />
         </div>
 
         <div className="flex flex-wrap gap-3">

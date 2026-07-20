@@ -20,12 +20,36 @@ export default function LiveMapPage() {
       .catch(() => {});
 
     const socket = getSocket();
-    socket.on("driver:moved", (p: MapDriver) => {
-      setDrivers((prev) => {
-        const rest = prev.filter((d) => d.id !== p.id);
-        return [...rest, p];
-      });
-    });
+    // ملاحظة: الخادم يبثّ الحقل باسم driverId (وليس id)، لذا نطبّعه هنا
+    // ونحافظ على حالة الانشغال/الاتجاه السابقة لأن حدث الموقع لا يحملهما.
+    socket.on(
+      "driver:moved",
+      (p: {
+        driverId?: string;
+        id?: string;
+        lat: number;
+        lng: number;
+        heading?: number;
+        busy?: boolean;
+      }) => {
+        const id = p.id ?? p.driverId;
+        if (!id) return;
+        setDrivers((prev) => {
+          const existing = prev.find((d) => d.id === id);
+          const rest = prev.filter((d) => d.id !== id);
+          return [
+            ...rest,
+            {
+              id,
+              lat: p.lat,
+              lng: p.lng,
+              heading: p.heading ?? existing?.heading,
+              busy: p.busy ?? existing?.busy,
+            },
+          ];
+        });
+      },
+    );
     return () => {
       socket.off("driver:moved");
     };

@@ -50,7 +50,7 @@ export default function LiveMap(props: Props) {
         strokeColor: "#ffffff",
         strokeWeight: 2,
       };
-      const title = `السائق ${d.id.slice(0, 8)} — ${
+      const title = `السائق ${(d.id ?? "").slice(0, 8)} — ${
         d.busy ? "مشغول" : "متاح"
       }`;
       return <Marker key={d.id} position={pos} title={title} icon={icon} />;
