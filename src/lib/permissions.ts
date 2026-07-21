@@ -95,6 +95,8 @@ const ROUTE_RULES: Array<{ prefix: string; permissions: string[] }> = [
   { prefix: "/notifications", permissions: ["notifications.send"] },
   { prefix: "/message-templates", permissions: ["notifications.send"] },
   { prefix: "/content-blocks", permissions: ["settings.manage"] },
+  { prefix: "/translations", permissions: ["settings.manage"] },
+  { prefix: "/mobile-assets", permissions: ["settings.manage"] },
   { prefix: "/backups", permissions: ["settings.manage"] },
   { prefix: "/queue-health", permissions: ["reports.read"] },
   {

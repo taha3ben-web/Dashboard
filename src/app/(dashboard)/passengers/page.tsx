@@ -14,6 +14,9 @@ interface Passenger {
   phone: string;
   email?: string;
   status: string;
+  gender?: string | null;
+  locale: string;
+  onboardingCompletedAt?: string | null;
   createdAt: string;
 }
 
@@ -52,6 +55,9 @@ export default function PassengersPage() {
     { key: "name", header: "الاسم" },
     { key: "phone", header: "الهاتف" },
     { key: "email", header: "البريد", render: (p) => p.email ?? "-" },
+    { key: "gender", header: "الجنس", render: (p) => p.gender ?? "-" },
+    { key: "locale", header: "اللغة" },
+    { key: "profile", header: "الملف", render: (p) => p.onboardingCompletedAt ? "مكتمل" : "غير مكتمل" },
     {
       key: "status",
       header: "الحالة",

@@ -4,8 +4,8 @@ import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
 
 export const metadata: Metadata = {
-  title: "NOVA Ride — لوحة التحكم",
-  description: "لوحة تحكم منصة NOVA Ride",
+  title: "flaminGO — لوحة التحكم",
+  description: "لوحة تحكم منصة flaminGO",
 };
 
 export default function RootLayout({

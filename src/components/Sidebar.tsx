@@ -133,6 +133,8 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/notifications", label: "الإشعارات", icon: Bell },
       { href: "/message-templates", label: "قوالب الرسائل", icon: FileText },
       { href: "/content-blocks", label: "كتل المحتوى", icon: BookOpen },
+      { href: "/translations", label: "ترجمات الموبايل", icon: BookOpen },
+      { href: "/mobile-assets", label: "أصول تطبيق الراكب", icon: Smartphone },
       { href: "/ads", label: "الإعلانات", icon: Megaphone },
       { href: "/app-versions", label: "إصدارات التطبيق", icon: Smartphone },
     ],
@@ -231,7 +233,7 @@ export function Sidebar({ mobile = false, onNavigate, onClose }: SidebarProps) {
           </div>
           <div>
             <div className="font-black tracking-tight text-slate-900 dark:text-white">
-              NOVA Ride
+              flaminGO
             </div>
             <div className="text-[11px] font-medium text-slate-400">
               Control Center

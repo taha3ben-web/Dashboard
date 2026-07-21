@@ -32,7 +32,7 @@ export function Topbar({
               {title}
             </h1>
             <p className="mt-0.5 hidden truncate text-xs text-slate-500 sm:block dark:text-gray-400">
-              {subtitle ?? "إدارة ومراقبة عمليات NOVA Ride في الوقت الفعلي"}
+              {subtitle ?? "إدارة ومراقبة عمليات flaminGO في الوقت الفعلي"}
             </p>
           </div>
         </div>

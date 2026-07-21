@@ -52,7 +52,7 @@ export default function LoginPage() {
               N
             </div>
             <div>
-              <h1 className="text-3xl font-black tracking-tight">NOVA Ride</h1>
+              <h1 className="text-3xl font-black tracking-tight">flaminGO</h1>
               <p className="text-sm text-indigo-200">
                 Global Mobility Control Center
               </p>
@@ -91,7 +91,7 @@ export default function LoginPage() {
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-700 font-black text-white">
                     N
                   </div>
-                  <div className="font-black">NOVA Ride</div>
+                  <div className="font-black">flaminGO</div>
                 </div>
               </div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
